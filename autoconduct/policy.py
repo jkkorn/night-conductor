@@ -15,6 +15,10 @@ from .usage import UsageSnapshot
 # beyond linear pace, so overnight runs never starve the next workdays.
 PACING_MARGIN = 15.0
 
+# Length of Claude's rolling session window. A session started now anchors a
+# window that stays "hot" for this many hours.
+FIVE_HOUR_WINDOW = 5.0
+
 
 @dataclass(frozen=True)
 class Decision:
@@ -33,6 +37,12 @@ def in_active_hours(now: datetime, active_hours: tuple[int, int]) -> bool:
     if start < end:
         return start <= now.hour < end
     return now.hour >= start or now.hour < end
+
+
+def hours_until_wake(now: datetime, wake_hour: int) -> float:
+    """Hours (fractional) until the next occurrence of wake_hour:00."""
+    now_frac = now.hour + now.minute / 60.0
+    return (wake_hour - now_frac) % 24.0
 
 
 def days_until_weekly_reset(usage: UsageSnapshot, now: datetime) -> float:
@@ -63,6 +73,20 @@ def should_resume(usage: UsageSnapshot, config: Config, now: datetime) -> Decisi
     """
     if not in_active_hours(now, config.active_hours):
         return Decision(False, f"outside active hours {config.active_hours}")
+
+    # Morning protection: the end of the active window is when the user is
+    # back at the computer. A session started now anchors a 5h window; never
+    # start one that would still be hot when they sit down — otherwise a 6am
+    # resume locks them out until 11am.
+    start, wake = config.active_hours
+    if start != wake:
+        remaining = hours_until_wake(now, wake)
+        if remaining < FIVE_HOUR_WINDOW:
+            return Decision(
+                False,
+                f"morning protection: a 5h window started now would still be "
+                f"open at {wake:02d}:00 (you're back in {remaining:.1f}h)",
+            )
 
     if usage.five_hour.utilization >= config.five_hour_ceiling:
         return Decision(

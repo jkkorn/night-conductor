@@ -9,6 +9,14 @@ enum Policy {
         return hour >= start || hour < end
     }
 
+    /// Length of Claude's rolling session window in hours.
+    static let fiveHourWindow = 5.0
+
+    static func hoursUntilWake(nowHour: Double, wakeHour: Int) -> Double {
+        let remaining = (Double(wakeHour) - nowHour).truncatingRemainder(dividingBy: 24)
+        return remaining < 0 ? remaining + 24 : remaining
+    }
+
     static func daysUntilWeeklyReset(_ usage: UsageSnapshot, now: Date) -> Double {
         guard let resetsAt = usage.sevenDay.resetsAt else { return 0 }
         return max(0, resetsAt.timeIntervalSince(now) / 86_400)
@@ -28,6 +36,24 @@ enum Policy {
                 resume: false,
                 reason: "Outside active hours (\(config.startHour):00–\(config.endHour):00)"
             )
+        }
+
+        // Morning protection: the user is back at the computer at endHour.
+        // A session started now anchors a 5h window — never start one that
+        // would still be hot when they sit down (a 6am resume would lock
+        // them out until 11am).
+        if !ignoreActiveHours, config.startHour != config.endHour {
+            let minute = calendar.component(.minute, from: now)
+            let nowFrac = Double(hour) + Double(minute) / 60.0
+            let remaining = hoursUntilWake(nowHour: nowFrac, wakeHour: config.endHour)
+            if remaining < Self.fiveHourWindow {
+                return Decision(
+                    resume: false,
+                    reason: "Morning protection: a session now would hold your "
+                        + "5-hour window past \(config.endHour):00 "
+                        + "(you're back in \(String(format: "%.1f", remaining))h)"
+                )
+            }
         }
 
         if usage.fiveHour.utilization >= config.fiveHourCeiling {

@@ -23,6 +23,10 @@ Every 10 minutes during your sleep window (default 23:00–07:00):
    - **weekly pacing**: if you've consumed more of your week than the time
      that has elapsed (plus a 15-point margin), it holds. 70% used with five
      days left? It won't make that worse overnight.
+   - **morning protection**: you tell it when you're back at your computer
+     (default 7:00). It never starts a session within 5 hours of that — a
+     6am resume would anchor a usage window that locks *you* out until 11am.
+     The night shift stands down at 2:00 so your window is fresh at 7:00.
 4. **Resume** — runs `claude --resume` headlessly in each session's workspace,
    one at a time, re-checking the budget after every run. Caps: 3 retries per
    session, 10 resumes per night. If usage can't be determined, it never

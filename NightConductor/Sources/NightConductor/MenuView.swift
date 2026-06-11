@@ -141,8 +141,10 @@ struct MenuView: View {
         VStack(spacing: 10) {
             if showSettings { SettingsPane() }
             HStack {
+                // No animation here: animated height changes make the
+                // MenuBarExtra window dismiss itself on some macOS versions.
                 Button {
-                    withAnimation { showSettings.toggle() }
+                    showSettings.toggle()
                 } label: {
                     Image(systemName: "gearshape")
                 }
@@ -150,7 +152,7 @@ struct MenuView: View {
                 .foregroundStyle(.secondary)
 
                 Button {
-                    withAnimation { showActivity.toggle() }
+                    showActivity.toggle()
                 } label: {
                     Image(systemName: "list.bullet.rectangle")
                 }
@@ -225,10 +227,15 @@ struct SettingsPane: View {
                 Text("Watch from").font(.caption)
                 Stepper("\(startHour):00", value: $startHour, in: 0...23)
                     .font(.caption.monospacedDigit())
-                Text("to").font(.caption)
+                Spacer()
+                Text("I'm back at").font(.caption)
                 Stepper("\(endHour):00", value: $endHour, in: 0...23)
                     .font(.caption.monospacedDigit())
             }
+            Text("Nothing starts after \(((endHour - 5) + 24) % 24):00, so your 5-hour window is fresh when you sit down.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Text("5h ceiling \(Int(fiveHourCeiling))%").font(.caption)
                 Slider(value: $fiveHourCeiling, in: 50...100, step: 5)

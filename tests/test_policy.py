@@ -74,6 +74,26 @@ class TestShouldResumeHardGates:
         assert decision.resume
 
 
+class TestMorningProtection:
+    def test_within_five_hours_of_wake_holds(self):
+        # 05:00 with wake at 07:00 -> a window started now is hot until 10:00
+        early_morning = NOW.replace(hour=5)
+        decision = should_resume(snapshot(), default_config(), early_morning)
+        assert not decision.resume
+        assert "morning protection" in decision.reason
+
+    def test_exactly_five_hours_before_wake_resumes(self):
+        # 02:00 with wake at 07:00 -> the window fully resets by 07:00
+        decision = should_resume(snapshot(), default_config(), NOW)
+        assert decision.resume
+
+    def test_just_before_wake_holds(self):
+        decision = should_resume(
+            snapshot(), default_config(), NOW.replace(hour=6, minute=30)
+        )
+        assert not decision.resume
+
+
 class TestWeeklyPacing:
     def test_burning_too_fast_holds(self):
         # 70% used but 5 of 7 days still left -> way ahead of pace

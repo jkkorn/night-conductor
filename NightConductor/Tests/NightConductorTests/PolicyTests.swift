@@ -43,6 +43,25 @@ final class PolicyTests: XCTestCase {
         XCTAssertTrue(decision.reason.contains("5-hour"))
     }
 
+    func testMorningProtectionHoldsWithinFiveHoursOfWake() {
+        let fiveAM = date(hour: 5) // wake at 7 -> window would be hot until 10
+        let decision = Policy.shouldResume(
+            usage: snapshot(now: fiveAM), config: PolicyConfig(),
+            now: fiveAM, calendar: utc
+        )
+        XCTAssertFalse(decision.resume)
+        XCTAssertTrue(decision.reason.contains("Morning protection"))
+    }
+
+    func testTwoAMIsTheLastSafeStart() {
+        let twoAM = date(hour: 2) // exactly 5h before wake -> resets by 07:00
+        let decision = Policy.shouldResume(
+            usage: snapshot(now: twoAM), config: PolicyConfig(),
+            now: twoAM, calendar: utc
+        )
+        XCTAssertTrue(decision.resume)
+    }
+
     func testBurningTooFastHolds() {
         let now = date(hour: 2)
         let decision = Policy.shouldResume(
