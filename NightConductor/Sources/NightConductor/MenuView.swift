@@ -8,8 +8,12 @@ enum AboutLinks {
 
 struct MenuView: View {
     @EnvironmentObject var state: AppState
-    @State private var showSettings = false
+    @State private var showSettings: Bool
     @State private var showActivity = false
+
+    init(showSettings: Bool = false) {
+        _showSettings = State(initialValue: showSettings)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {

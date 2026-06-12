@@ -1,8 +1,12 @@
+<p align="center"><img src="docs/icon.png" width="92" alt="Night Conductor icon"></p>
+
 # 🌙 Night Conductor
 
 **Your [Conductor](https://conductor.build) sessions hit the Claude usage limit at
 11pm. Night Conductor resumes them while you sleep — without blowing your
 weekly budget.**
+
+<p align="center"><img src="docs/popover.png" width="340" alt="Night Conductor popover: usage meters, budget decision, stalled sessions"></p>
 
 A tiny macOS menu bar app. A moon lives in your menu bar. While you sleep, it
 watches your stalled Conductor sessions and your live Claude usage, and resumes
@@ -60,6 +64,8 @@ sudo pmset repeat wakeorpoweron MTWRFSU 23:00:00
 (or keep it plugged in with `sudo pmset -c sleep 0`)
 
 ## The interface
+
+<p align="center"><img src="docs/settings.png" width="340" alt="Settings: watch hours, morning protection, ceilings, resume inside Conductor"></p>
 
 - **Two meters** — your live 5-hour window and weekly budget, with reset times.
 - **Decision line** — exactly why it will or won't resume right now

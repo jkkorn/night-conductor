@@ -9,6 +9,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
+enum Main {
+    static func main() {
+        let args = CommandLine.arguments
+        if let flagIndex = args.firstIndex(of: "--render-screenshot"), args.count > flagIndex + 1 {
+            MainActor.assumeIsolated {
+                Screenshotter.render(
+                    to: args[flagIndex + 1],
+                    showSettings: args.contains("--settings")
+                )
+            }
+            return
+        }
+        NightConductorApp.main()
+    }
+}
+
 struct NightConductorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var state = AppState()

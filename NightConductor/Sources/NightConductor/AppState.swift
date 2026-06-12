@@ -18,7 +18,7 @@ final class AppState: ObservableObject {
 
     private var loop: Task<Void, Never>?
 
-    init() {
+    init(forScreenshots: Bool = false) {
         UserDefaults.standard.register(defaults: [
             "armed": true,
             "startHour": 23,
@@ -26,6 +26,7 @@ final class AppState: ObservableObject {
             "fiveHourCeiling": 85.0,
             "weeklyCeiling": 90.0,
         ])
+        if forScreenshots { return } // inert state; data injected by caller
         // UI resume is on by default; if the permission is missing, show
         // the system prompt right away so setup is one click at launch.
         if uiResumeEnabled, !UIResumer.hasAccessibilityPermission {
