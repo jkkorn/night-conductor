@@ -26,6 +26,11 @@ final class AppState: ObservableObject {
             "fiveHourCeiling": 85.0,
             "weeklyCeiling": 90.0,
         ])
+        // UI resume is on by default; if the permission is missing, show
+        // the system prompt right away so setup is one click at launch.
+        if uiResumeEnabled, !UIResumer.hasAccessibilityPermission {
+            UIResumer.requestPermission()
+        }
         start()
     }
 

@@ -245,6 +245,10 @@ struct SettingsPane: View {
     @AppStorage("weeklyCeiling") private var weeklyCeiling = 90.0
     @AppStorage("uiResume") private var uiResume = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    // AXIsProcessTrusted() is only re-read on render, so poll while the
+    // pane is open — the warning clears within seconds of granting.
+    @State private var hasAccessibility = UIResumer.hasAccessibilityPermission
+    private let permissionTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -293,7 +297,7 @@ struct SettingsPane: View {
                     }
                 }
             if uiResume {
-                if UIResumer.hasAccessibilityPermission {
+                if hasAccessibility {
                     Text("Presses Conductor's own Retry button, so the chat stays in sync. Falls back to a headless resume if that fails.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -308,5 +312,8 @@ struct SettingsPane: View {
         }
         .padding(10)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        .onReceive(permissionTimer) { _ in
+            hasAccessibility = UIResumer.hasAccessibilityPermission
+        }
     }
 }

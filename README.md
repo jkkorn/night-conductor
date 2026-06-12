@@ -91,6 +91,25 @@ python3 -m autoconduct install    # launchd agent, ticks every 10 min
 - Not affiliated with [Conductor](https://conductor.build) or Anthropic —
   just built with love by a heavy user.
 
+## FAQ
+
+**The chat in Conductor updates when Night Conductor resumes?**
+Yes — by default it resumes *inside* Conductor by pressing the session's own
+Retry button via the Accessibility API (grant access when prompted). If that
+fails for any reason, it falls back to a headless `claude --resume`: the work
+still lands in the workspace, but the chat shows a stale error banner.
+
+**I granted Accessibility access but it still shows the orange warning.**
+If you built the app yourself, each rebuild gets a new ad-hoc code signature
+and macOS silently ignores the old grant. Remove Night Conductor from
+System Settings → Privacy & Security → Accessibility (− button) and re-add
+it, or run `tccutil reset Accessibility app.night-conductor` and grant again.
+
+**The popover keeps closing by itself.**
+A menu bar manager (Ice, Bartender) with auto-rehide will close any open
+menu bar popover when it rehides. Pin Night Conductor to the always-visible
+section, or increase the rehide interval.
+
 ## About
 
 Made with ❤️ in Brazil by [Jonathan Korn](https://www.linkedin.com/in/jkkorn).
