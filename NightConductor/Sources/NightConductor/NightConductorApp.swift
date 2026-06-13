@@ -28,14 +28,32 @@ enum Main {
 struct NightConductorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var state = AppState()
-    @AppStorage("armed") private var armed = true
 
     var body: some Scene {
         MenuBarExtra {
             MenuView().environmentObject(state)
         } label: {
-            Image(systemName: armed ? "moon.stars.fill" : "moon.zzz")
+            MenuBarLabel(state: state)
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+/// The menu bar item itself: the moon plus, optionally, the live 5-hour
+/// usage % — the number that actually decides whether you can run Claude
+/// right now. Updates every 30s with the view loop.
+struct MenuBarLabel: View {
+    @ObservedObject var state: AppState
+    @AppStorage("armed") private var armed = true
+    @AppStorage("menuBarUsage") private var menuBarUsage = true
+
+    var body: some View {
+        let icon = armed ? "moon.stars.fill" : "moon.zzz"
+        if menuBarUsage, let usage = state.usage {
+            Image(systemName: icon)
+            Text("\(Int(usage.fiveHour.utilization))%")
+        } else {
+            Image(systemName: icon)
+        }
     }
 }

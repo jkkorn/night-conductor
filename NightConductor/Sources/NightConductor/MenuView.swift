@@ -248,6 +248,7 @@ struct SettingsPane: View {
     @AppStorage("fiveHourCeiling") private var fiveHourCeiling = 85.0
     @AppStorage("weeklyCeiling") private var weeklyCeiling = 90.0
     @AppStorage("uiResume") private var uiResume = true
+    @AppStorage("menuBarUsage") private var menuBarUsage = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     // AXIsProcessTrusted() is only re-read on render, so poll while the
     // pane is open — the warning clears within seconds of granting.
@@ -277,6 +278,9 @@ struct SettingsPane: View {
                 Text("Weekly stop \(Int(weeklyCeiling))%").font(.caption)
                 Slider(value: $weeklyCeiling, in: 50...100, step: 5)
             }
+            Toggle("Show 5h usage in menu bar", isOn: $menuBarUsage)
+                .font(.caption)
+                .toggleStyle(.checkbox)
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .font(.caption)
                 .toggleStyle(.checkbox)

@@ -67,6 +67,8 @@ sudo pmset repeat wakeorpoweron MTWRFSU 23:00:00
 
 <p align="center"><img src="docs/settings.png" width="340" alt="Settings: watch hours, morning protection, ceilings, resume inside Conductor"></p>
 
+- **Menu bar** — the moon sits next to your live 5-hour usage %, so you can
+  glance at how much room you have without opening anything (toggle in settings).
 - **Two meters** — your live 5-hour window and weekly budget, with reset times.
 - **Decision line** — exactly why it will or won't resume right now
   ("Wiggle room: 29% of week used, 1.6 days to reset").
