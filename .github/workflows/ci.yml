@@ -8,7 +8,7 @@ on:
 jobs:
   python:
     name: Python CLI tests
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,7 +21,7 @@ jobs:
 
   swift:
     name: Night Conductor app tests
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Run Swift tests
@@ -30,7 +30,7 @@ jobs:
 
   build:
     name: Build app bundle
-    runs-on: macos-14
+    runs-on: macos-15
     needs: [python, swift]
     steps:
       - uses: actions/checkout@v4
