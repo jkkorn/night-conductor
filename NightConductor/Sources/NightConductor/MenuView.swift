@@ -64,32 +64,34 @@ struct MenuView: View {
         .frame(width: 340)
     }
 
-    // Nocturnal header: a gradient night-sky card with the brand wordmark
-    // (bottom-left), the arm control (bottom-right), and an atmospheric moon
-    // (top-right). Each is its own corner so nothing overlaps.
+    // Living night-sky header: a drifting aurora + twinkling starfield, with
+    // the brand wordmark (bottom-left), the arm control (bottom-right), and a
+    // glowing moon (top-right). Each is its own corner so nothing overlaps.
     private var header: some View {
         ZStack(alignment: .topTrailing) {
-            LinearGradient(
-                colors: [Color(red: 0.20, green: 0.16, blue: 0.45),
-                         Color(red: 0.06, green: 0.06, blue: 0.16)],
-                startPoint: .topTrailing, endPoint: .bottomLeading
-            )
-            Image(systemName: "moon.stars.fill")
-                .font(.system(size: 30))
-                .foregroundStyle(.white.opacity(0.22)) // atmospheric brand mark
+            NightSkyView(armed: state.armed)
+            GlowingMoon(armed: state.armed)
                 .padding(Design.l)
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: Design.xs) {
                     Text("Night Conductor")
                         .font(.system(.title3, design: .serif).weight(.semibold))
                         .foregroundStyle(.white)
-                    Text(subtitle).font(.caption).foregroundStyle(.white.opacity(0.7))
+                        .shadow(color: .black.opacity(0.35), radius: 6, y: 1)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .contentTransition(.opacity)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: Design.xs) {
                     Toggle("Arm night watch", isOn: Binding(
                         get: { state.armed },
-                        set: { state.armed = $0 }
+                        set: { newValue in
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                                state.armed = newValue
+                            }
+                        }
                     ))
                     .labelsHidden()
                     .toggleStyle(.switch)
@@ -99,13 +101,18 @@ struct MenuView: View {
                     Text(state.armed ? "ARMED" : "PAUSED")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(state.armed ? Color.green : .white.opacity(0.6))
+                        .contentTransition(.numericText())
                 }
             }
             .padding(Design.l)
             .frame(maxHeight: .infinity, alignment: .bottom)
         }
-        .frame(height: 96)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .frame(height: 100)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 0.5) // crisp edge
+        )
     }
 
     private var subtitle: String {
@@ -133,15 +140,15 @@ struct MenuView: View {
         HStack(spacing: Design.m) {
             Image(systemName: decisionIcon)
                 .foregroundStyle(decisionColor)
+                .contentTransition(.symbolEffect(.replace))
             Text(state.decision?.reason ?? "Waiting for first check…")
                 .font(.callout)
-                .foregroundStyle(.primary.opacity(0.85))
+                .foregroundStyle(.primary.opacity(0.9))
                 .lineLimit(2)
+                .contentTransition(.opacity)
         }
-        .padding(Design.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(decisionColor.opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: Design.cardRadius))
+        .glassCard(tint: decisionColor)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: decisionColor)
     }
 
     private var decisionColor: Color {
@@ -188,6 +195,13 @@ struct MenuView: View {
                                 }
                                 Spacer()
                             }
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
+                            .hoverLift()
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -196,17 +210,11 @@ struct MenuView: View {
                 Button {
                     Task { await state.tick(manual: true) }
                 } label: {
-                    Label("Resume now", systemImage: "play.fill")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Design.m)
-                        .background(
-                            (state.isWorking ? Color.gray : Color.indigo).gradient,
-                            in: RoundedRectangle(cornerRadius: Design.cardRadius)
-                        )
-                        .foregroundStyle(.white)
+                    Label(state.isWorking ? "Working…" : "Resume now",
+                          systemImage: state.isWorking ? "hourglass" : "play.fill")
+                        .contentTransition(.opacity)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlowButtonStyle(disabled: state.isWorking))
                 .disabled(state.isWorking)
                 .help("Bypasses the night schedule, never the budget gates")
             }
@@ -324,16 +332,28 @@ struct UsageMeter: View {
                 Text(resetText).font(.caption).foregroundStyle(.secondary)
                 Text(window == nil ? "–" : "\(Int(value))%")
                     .font(.subheadline.weight(.bold).monospacedDigit())
+                    .foregroundStyle(Color.usageStatus(value))
+                    .contentTransition(.numericText())
             }
-            // Custom bar with an explicit semantic fill. macOS's
-            // ProgressView(.linear) ignores .tint in some render contexts,
-            // washing the fill to gray — and the color IS the signal here.
+            // Custom bar: a flat semantic fill (the color IS the signal),
+            // with a soft glow, a top sheen for a glassy read, and a spring
+            // on value changes so it fills like liquid, not a jump.
             GeometryReader { geo in
+                let w = max(6, geo.size.width * min(value, 100) / 100)
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.secondary.opacity(0.2))
+                    Capsule().fill(Color.secondary.opacity(0.18))
                     Capsule()
                         .fill(Color.usageStatus(value).gradient)
-                        .frame(width: max(6, geo.size.width * min(value, 100) / 100))
+                        .overlay(alignment: .top) {
+                            Capsule()
+                                .fill(.white.opacity(0.28))
+                                .frame(height: 3)
+                                .padding(.horizontal, 3)
+                                .padding(.top, 1)
+                        }
+                        .frame(width: w)
+                        .shadow(color: Color.usageStatus(value).opacity(0.55), radius: 5, y: 1)
+                        .animation(.spring(response: 0.65, dampingFraction: 0.82), value: value)
                 }
             }
             .frame(height: 10)
@@ -349,6 +369,7 @@ struct SettingsPane: View {
     @AppStorage("uiResume") private var uiResume = true
     @AppStorage("menuBarUsage") private var menuBarUsage = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var wakeScheduled = PowerManager.currentWakeSchedule() != nil
     // AXIsProcessTrusted() is only re-read on render, so poll while the
     // pane is open — the warning clears within seconds of granting.
     @State private var hasAccessibility = UIResumer.hasAccessibilityPermission
@@ -358,24 +379,43 @@ struct SettingsPane: View {
         VStack(alignment: .leading, spacing: Design.m) {
             HStack {
                 Text("Watch from").font(.caption)
-                Stepper("\(startHour):00", value: $startHour, in: 0...23)
-                    .font(.caption.monospacedDigit())
+                HourStepper(hour: $startHour)
                 Spacer()
                 Text("I'm back at").font(.caption)
-                Stepper("\(endHour):00", value: $endHour, in: 0...23)
-                    .font(.caption.monospacedDigit())
+                HourStepper(hour: $endHour)
             }
             Text("Nothing starts after \(((endHour - 5) + 24) % 24):00, so your 5-hour window is fresh when you sit down.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             HStack {
-                Text("5h ceiling \(Int(fiveHourCeiling))%").font(.caption)
-                Slider(value: $fiveHourCeiling, in: 50...100, step: 5)
+                Text("Nightly wake").font(.caption)
+                Spacer()
+                if wakeScheduled {
+                    Label("scheduled", systemImage: "checkmark.circle.fill")
+                        .font(.caption2).foregroundStyle(.green)
+                    Button("Remove") {
+                        if PowerManager.cancelNightlyWake() { wakeScheduled = false }
+                    }.controlSize(.small)
+                } else {
+                    Button("Wake at \(startHour):00…") {
+                        if PowerManager.scheduleNightlyWake(hour: startHour) { wakeScheduled = true }
+                    }.controlSize(.small)
+                }
             }
-            HStack {
-                Text("Weekly stop \(Int(weeklyCeiling))%").font(.caption)
-                Slider(value: $weeklyCeiling, in: 50...100, step: 5)
+            Text("Night Conductor keeps your Mac awake during the watch by itself. Only schedule a wake if your Mac fully sleeps before then (asks for your password once).")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: Design.l) {
+                Text("5h ceiling \(Int(fiveHourCeiling))%")
+                    .font(.caption).frame(width: 96, alignment: .leading)
+                NightSlider(value: $fiveHourCeiling, range: 50...100, step: 5)
+            }
+            HStack(spacing: Design.l) {
+                Text("Weekly stop \(Int(weeklyCeiling))%")
+                    .font(.caption).frame(width: 96, alignment: .leading)
+                NightSlider(value: $weeklyCeiling, range: 50...100, step: 5)
             }
             Toggle("Show 5h usage in menu bar", isOn: $menuBarUsage)
                 .font(.caption)
@@ -408,17 +448,16 @@ struct SettingsPane: View {
                     Text("Presses Conductor's own Retry button, so the chat stays in sync. Falls back to a headless resume if that fails.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     Text("Needs Accessibility access: System Settings → Privacy & Security → Accessibility → enable Night Conductor.")
                         .font(.caption2)
                         .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
-        .padding(Design.l)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Design.cardRadius))
+        .glassCard()
         .onReceive(permissionTimer) { _ in
             hasAccessibility = UIResumer.hasAccessibilityPermission
         }

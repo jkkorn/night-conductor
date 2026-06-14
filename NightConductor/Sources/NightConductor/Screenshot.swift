@@ -6,7 +6,7 @@ import SwiftUI
 /// Uses representative demo data so real session titles never ship.
 @MainActor
 enum Screenshotter {
-    static func render(to path: String, showSettings: Bool) {
+    static func render(to path: String, showSettings: Bool, state stateName: String = "default") {
         // ImageRenderer can't draw NSView-backed controls (Toggle, Stepper,
         // Slider), so render in a real off-to-the-side window and snapshot
         // the view hierarchy instead — that draws everything.
@@ -15,7 +15,7 @@ enum Screenshotter {
         app.appearance = NSAppearance(named: .darkAqua)
         app.finishLaunching()
 
-        let state = demoState()
+        let state = demoState(stateName)
         let root = MenuView(showSettings: showSettings)
             .environmentObject(state)
             .frame(width: 340)
@@ -67,19 +67,24 @@ enum Screenshotter {
         print("Wrote \(path)")
     }
 
-    private static func demoState() -> AppState {
+    private static func demoState(_ name: String = "default") -> AppState {
+        // Per-state knobs so we can audit every visual state as a still.
+        let armed = name != "paused"
+        let fiveHour = name == "high" ? 88.0 : 36.0
+        let weekly = name == "high" ? 76.0 : 29.0
+        UserDefaults.standard.set(armed, forKey: "armed")
+
         let state = AppState(forScreenshots: true)
         let now = Date()
         state.usage = UsageSnapshot(
-            fiveHour: UsageWindow(utilization: 36, resetsAt: now.addingTimeInterval(3.2 * 3600)),
-            sevenDay: UsageWindow(utilization: 29, resetsAt: now.addingTimeInterval(1.6 * 86_400)),
+            fiveHour: UsageWindow(utilization: fiveHour, resetsAt: now.addingTimeInterval(3.2 * 3600)),
+            sevenDay: UsageWindow(utilization: weekly, resetsAt: now.addingTimeInterval(1.6 * 86_400)),
             fetchedAt: now
         )
-        state.decision = Decision(
-            resume: true,
-            reason: "Wiggle room: 29% of week used, 1.6 days to reset"
-        )
-        state.stalled = [
+        state.decision = name == "high"
+            ? Decision(resume: false, reason: "5-hour window at 88% (ceiling 85%)")
+            : Decision(resume: true, reason: "Wiggle room: 29% of week used, 1.6 days to reset")
+        state.stalled = name == "empty" ? [] : [
             StalledSession(
                 sessionID: "demo-1", claudeSessionID: "demo-1",
                 title: "Refactor onboarding flow", workspacePath: "/ws/myapp/oslo",

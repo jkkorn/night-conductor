@@ -49,6 +49,7 @@ final class AppState: ObservableObject {
         set {
             objectWillChange.send()
             UserDefaults.standard.set(newValue, forKey: "armed")
+            if !newValue { PowerManager.preventIdleSleep(false) } // let it sleep
             log(newValue ? "Night watch armed" : "Night watch disarmed")
         }
     }
@@ -80,6 +81,14 @@ final class AppState: ObservableObject {
     @discardableResult
     func refreshView() async -> Bool {
         let config = PolicyConfig.fromDefaults()
+        // Hold the Mac awake while the watch is armed and in its window, so
+        // every tick and resume actually runs (no privileges needed).
+        let inWindow = Policy.inActiveHours(
+            hour: Calendar.current.component(.hour, from: Date()),
+            start: config.startHour, end: config.endHour
+        )
+        PowerManager.preventIdleSleep(armed && inWindow)
+
         if let fresh = try? ConductorDB.findStalledSessions() {
             stalled = fresh
         }

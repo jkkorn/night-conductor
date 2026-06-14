@@ -13,10 +13,13 @@ enum Main {
     static func main() {
         let args = CommandLine.arguments
         if let flagIndex = args.firstIndex(of: "--render-screenshot"), args.count > flagIndex + 1 {
+            var stateName = "default"
+            if let s = args.firstIndex(of: "--state"), args.count > s + 1 { stateName = args[s + 1] }
             MainActor.assumeIsolated {
                 Screenshotter.render(
                     to: args[flagIndex + 1],
-                    showSettings: args.contains("--settings")
+                    showSettings: args.contains("--settings"),
+                    state: stateName
                 )
             }
             return
