@@ -58,9 +58,13 @@ enum ISO {
     /// Parse ISO-8601 timestamps with any fractional-second precision
     /// (the usage API emits 6 digits, Conductor's DB emits 3).
     static func parse(_ raw: String) -> Date? {
-        let cleaned = raw.replacingOccurrences(
+        var cleaned = raw.replacingOccurrences(
             of: #"\.\d+"#, with: "", options: .regularExpression
         )
+        // Some SQLite writers separate date and time with a space, not "T".
+        if !cleaned.contains("T"), let space = cleaned.firstIndex(of: " ") {
+            cleaned.replaceSubrange(space...space, with: "T")
+        }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: cleaned)

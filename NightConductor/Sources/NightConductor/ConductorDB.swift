@@ -122,8 +122,10 @@ enum ConductorDB {
               isDirectory.boolValue
         else { return nil } // workspace was removed; nothing to resume into
 
-        let stalledAt = column(5).flatMap(ISO.parse)
-        if let stalledAt, now.timeIntervalSince(stalledAt) > maxStallAge {
+        // Fail closed: an unparseable timestamp must not bypass the
+        // staleness guard and let an arbitrarily old session be resumed.
+        guard let stalledAt = column(5).flatMap(ISO.parse) else { return nil }
+        if now.timeIntervalSince(stalledAt) > maxStallAge {
             return nil // too old; the user has moved on
         }
 

@@ -95,10 +95,17 @@ enum UIResumer {
         let workspace = normalize(session.workspaceName)
         let title = normalize(session.title)
 
+        // Require a word-boundary prefix so "new" can't match "new jersey"
+        // when the target workspace is "new york".
+        func wordPrefix(_ label: String, _ needle: String) -> Bool {
+            guard !needle.isEmpty else { return false }
+            let l = normalize(label)
+            return l == needle || l.hasPrefix(needle + " ")
+        }
         let strategies: [(String) -> Bool] = [
             { normalize($0) == workspace },
-            { normalize($0).hasPrefix(workspace) && !workspace.isEmpty },
-            { normalize($0).hasPrefix(title) && !title.isEmpty },
+            { wordPrefix($0, workspace) },
+            { wordPrefix($0, title) },
         ]
         for matches in strategies {
             if let link = findElement(in: root, role: "AXLink", where: matches) {

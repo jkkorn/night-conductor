@@ -118,3 +118,42 @@ final class UIResumerTests: XCTestCase {
         XCTAssertTrue(sidebar.hasPrefix(ws))
     }
 }
+
+final class NightLedgerTests: XCTestCase {
+    private func saoPaulo() -> Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Sao_Paulo")! // UTC-3
+        return c
+    }
+
+    func testNightKeyStableAcrossLocalMidnightInNegativeOffsetTZ() {
+        // Regression (C1): the key must not flip at local midnight in a
+        // negative-UTC-offset zone, or the nightly caps reset every night.
+        let cal = saoPaulo()
+        let evening = cal.date(from: DateComponents(
+            year: 2026, month: 6, day: 10, hour: 23, minute: 30))!
+        let afterMidnight = cal.date(from: DateComponents(
+            year: 2026, month: 6, day: 11, hour: 0, minute: 30))!
+        let k1 = NightLedger.currentKey(now: evening, startHour: 23, calendar: cal)
+        let k2 = NightLedger.currentKey(now: afterMidnight, startHour: 23, calendar: cal)
+        XCTAssertEqual(k1, k2, "night key must be stable across local midnight")
+        XCTAssertEqual(k1, "2026-06-10")
+    }
+
+    func testRecordingIsImmutableAndCounts() {
+        let base = NightLedger(key: "2026-06-10", counts: [:])
+        let after = base.recording("s1").recording("s1").recording("s2")
+        XCTAssertEqual(base.total, 0) // original unchanged
+        XCTAssertEqual(after.count(for: "s1"), 2)
+        XCTAssertEqual(after.total, 3)
+    }
+}
+
+final class ISOSpaceTests: XCTestCase {
+    func testParsesSpaceSeparatedTimestamp() {
+        // Regression (M3): a space separator must still parse, else the
+        // 48h staleness guard would be skipped.
+        XCTAssertNotNil(ISO.parse("2026-06-09 03:42:18.186Z"))
+        XCTAssertNotNil(ISO.parse("2026-06-09 03:42:18Z"))
+    }
+}

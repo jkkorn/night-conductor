@@ -5,6 +5,17 @@ struct ResumeResult {
     let detail: String
 }
 
+/// Thread-safe accumulator for a pipe drained on a background queue.
+private final class OutputBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    func append(_ chunk: Data) { lock.lock(); data.append(chunk); lock.unlock() }
+    var string: String {
+        lock.lock(); defer { lock.unlock() }
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+}
+
 /// Resumes a stalled session headlessly via `claude --resume` in the
 /// session's workspace directory.
 enum Resumer {
@@ -65,8 +76,9 @@ enum Resumer {
         process.environment = environment
 
         let stdout = Pipe()
+        let stderr = Pipe()
         process.standardOutput = stdout
-        process.standardError = Pipe()
+        process.standardError = stderr
 
         let finished = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in finished.signal() }
@@ -76,18 +88,33 @@ enum Resumer {
         } catch {
             return ResumeResult(ok: false, detail: "cannot launch claude: \(error.localizedDescription)")
         }
-        if finished.wait(timeout: .now() + timeoutSeconds) == .timedOut {
-            process.terminate()
-            return ResumeResult(ok: false, detail: "timed out after 1h")
+
+        // Drain BOTH pipes concurrently while the process runs. A long
+        // agentic run emits enough stderr to fill the 64KB pipe buffer; if
+        // we only read after exit, the child blocks writing and never exits.
+        let outBox = OutputBox()
+        let errBox = OutputBox()
+        let readers = DispatchGroup()
+        let queue = DispatchQueue(label: "nightconductor.resume.read", attributes: .concurrent)
+        for (pipe, box) in [(stdout, outBox), (stderr, errBox)] {
+            readers.enter()
+            queue.async {
+                box.append(pipe.fileHandleForReading.readDataToEndOfFile())
+                readers.leave()
+            }
         }
 
-        let output = String(
-            data: stdout.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8
-        )?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if process.terminationStatus != 0 {
-            return ResumeResult(ok: false, detail: "exit \(process.terminationStatus): \(output.suffix(200))")
+        if finished.wait(timeout: .now() + timeoutSeconds) == .timedOut {
+            process.terminate()
+            readers.wait() // pipes hit EOF once the child is gone
+            return ResumeResult(ok: false, detail: "timed out after 1h")
         }
-        return ResumeResult(ok: true, detail: String(output.suffix(200)))
+        readers.wait()
+
+        let combined = (outBox.string + errBox.string).trimmingCharacters(in: .whitespacesAndNewlines)
+        if process.terminationStatus != 0 {
+            return ResumeResult(ok: false, detail: "exit \(process.terminationStatus): \(combined.suffix(200))")
+        }
+        return ResumeResult(ok: true, detail: String(outBox.string.trimmingCharacters(in: .whitespacesAndNewlines).suffix(200)))
     }
 }

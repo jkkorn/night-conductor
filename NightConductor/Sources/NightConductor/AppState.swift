@@ -22,6 +22,10 @@ final class AppState: ObservableObject {
 
     private var viewLoop: Task<Void, Never>?
     private var resumeLoop: Task<Void, Never>?
+    // Guards against the resume loop and the manual "Resume now" button
+    // running a resume pass at the same time (which could double-run a
+    // session and bypass the per-night caps).
+    private var isResuming = false
 
     init(forScreenshots: Bool = false) {
         UserDefaults.standard.register(defaults: [
@@ -71,7 +75,10 @@ final class AppState: ObservableObject {
     /// Cheap, frequent refresh of what the popover shows. Never resumes.
     /// The stalled list comes from a local DB read, so it stays fresh even
     /// when the network is down (usage failure holds, but doesn't wipe it).
-    func refreshView() async {
+    /// Returns whether *fresh* usage was obtained — callers must not resume
+    /// on a stale snapshot (fail closed).
+    @discardableResult
+    func refreshView() async -> Bool {
         let config = PolicyConfig.fromDefaults()
         if let fresh = try? ConductorDB.findStalledSessions() {
             stalled = fresh
@@ -81,13 +88,14 @@ final class AppState: ObservableObject {
             usage = try await UsageClient.fetchUsage()
         } catch {
             decision = Decision(resume: false, reason: "Can't read usage — holding")
-            return
+            return false
         }
         if let snapshot = usage {
             decision = Policy.shouldResume(
                 usage: snapshot, config: config, now: Date(), ignoreActiveHours: false
             )
         }
+        return true
     }
 
     /// The budget-gated resume pass, run on the slower resume loop.
@@ -103,7 +111,9 @@ final class AppState: ObservableObject {
     func tick(manual: Bool) async {
         isWorking = true
         defer { isWorking = false }
-        await refreshView()
+        // Fail closed: if we couldn't get fresh usage, refreshView already
+        // set a holding decision — don't recompute against a stale snapshot.
+        guard await refreshView() else { return }
         let config = PolicyConfig.fromDefaults()
         if let snapshot = usage {
             decision = Policy.shouldResume(
@@ -120,9 +130,25 @@ final class AppState: ObservableObject {
     }
 
     private func resumeStalledSessions(config: PolicyConfig, manual: Bool) async {
+        guard !isResuming else { return } // never run two passes at once
+        isResuming = true
+        defer { isResuming = false }
+
         let useUI = uiResumeEnabled && UIResumer.hasAccessibilityPermission
-        let claudePath = Resumer.findClaudeBinary()
-        if !useUI && claudePath == nil {
+
+        // Locating the claude CLI may spawn a login shell, so do it off the
+        // main thread and only when headless is actually needed (UI mode
+        // defers it until a UI resume fails).
+        var resolvedClaudePath: String??  // nil = not looked up yet
+        func claudeBinary() async -> String? {
+            if let cached = resolvedClaudePath { return cached }
+            let found = await Task.detached(priority: .utility) {
+                Resumer.findClaudeBinary()
+            }.value
+            resolvedClaudePath = .some(found)
+            return found
+        }
+        if !useUI, await claudeBinary() == nil {
             log("⚠️ claude CLI not found — install Claude Code first")
             return
         }
@@ -151,7 +177,7 @@ final class AppState: ObservableObject {
                     log("↻ UI resume failed (\(result.detail)) — falling back to headless")
                 }
             }
-            if !result.ok, let claudePath {
+            if !result.ok, let claudePath = await claudeBinary() {
                 result = await Task.detached(priority: .utility) {
                     Resumer.resume(session: session, claudePath: claudePath, config: config)
                 }.value
@@ -219,7 +245,11 @@ struct NightLedger {
     static func currentKey(now: Date = Date(), startHour: Int, calendar: Calendar = .current) -> String {
         let hour = calendar.component(.hour, from: now)
         let anchor = hour >= startHour ? now : now.addingTimeInterval(-86_400)
-        return anchor.formatted(.iso8601.year().month().day())
+        // Format the date in the SAME (local) calendar used for the hour.
+        // `.iso8601` formats in UTC, which in negative-offset zones rolls
+        // the date over at local midnight and silently resets the caps.
+        let c = calendar.dateComponents([.year, .month, .day], from: anchor)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
     static func load(startHour: Int, defaults: UserDefaults = .standard) -> NightLedger {
