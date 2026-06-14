@@ -447,11 +447,6 @@ struct SettingsPane: View {
             Toggle("Resume inside Conductor", isOn: $uiResume)
                 .font(.caption)
                 .toggleStyle(.checkbox)
-                .onChange(of: uiResume) { _, enabled in
-                    if enabled, !UIResumer.hasAccessibilityPermission {
-                        UIResumer.requestPermission()
-                    }
-                }
             if uiResume {
                 if hasAccessibility {
                     Text("Presses Conductor's own Retry button, so the chat stays in sync. Falls back to a headless resume if that fails.")
@@ -459,10 +454,16 @@ struct SettingsPane: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    Text("Needs Accessibility access: System Settings → Privacy & Security → Accessibility → enable Night Conductor.")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: Design.s) {
+                        Text("Needs Accessibility access to press Conductor's Retry button.")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Open Accessibility Settings…") {
+                            UIResumer.openAccessibilitySettings()
+                        }
+                        .controlSize(.small)
+                    }
                 }
             }
         }

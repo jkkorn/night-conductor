@@ -41,11 +41,8 @@ final class AppState: ObservableObject {
             "weeklyCeiling": 90.0,
         ])
         if forScreenshots { return } // inert state; data injected by caller
-        // UI resume is on by default; if the permission is missing, show
-        // the system prompt right away so setup is one click at launch.
-        if uiResumeEnabled, !UIResumer.hasAccessibilityPermission {
-            UIResumer.requestPermission()
-        }
+        // No accessibility prompt at launch — that nags on every relaunch.
+        // The settings panel shows a button to grant it on the user's terms.
         start()
     }
 
