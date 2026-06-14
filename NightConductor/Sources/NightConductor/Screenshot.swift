@@ -22,8 +22,11 @@ enum Screenshotter {
             .fixedSize(horizontal: false, vertical: true)
             .background(Color(red: 0.12, green: 0.12, blue: 0.14))
             .environment(\.colorScheme, .dark)
+        renderHosting(AnyView(root), to: path)
+    }
 
-        let hosting = NSHostingView(rootView: root)
+    private static func renderHosting(_ rootView: some View, to path: String) {
+        let hosting = NSHostingView(rootView: rootView)
         hosting.appearance = NSAppearance(named: .darkAqua)
         hosting.frame = NSRect(x: 0, y: 0, width: 340, height: 900)
 

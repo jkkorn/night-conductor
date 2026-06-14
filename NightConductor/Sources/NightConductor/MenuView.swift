@@ -52,7 +52,6 @@ struct MenuView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.l) {
             header
-            Divider()
             usageSection
             decisionRow
             stalledSection
@@ -61,34 +60,52 @@ struct MenuView: View {
             footer
             about
         }
-        .padding(Design.xl)
+        .padding(Design.l)
         .frame(width: 340)
     }
 
+    // Nocturnal header: a gradient night-sky card with the brand wordmark
+    // (bottom-left), the arm control (bottom-right), and an atmospheric moon
+    // (top-right). Each is its own corner so nothing overlaps.
     private var header: some View {
-        HStack(spacing: Design.l) {
+        ZStack(alignment: .topTrailing) {
+            LinearGradient(
+                colors: [Color(red: 0.20, green: 0.16, blue: 0.45),
+                         Color(red: 0.06, green: 0.06, blue: 0.16)],
+                startPoint: .topTrailing, endPoint: .bottomLeading
+            )
             Image(systemName: "moon.stars.fill")
-                .font(.title2)
-                .foregroundStyle(.indigo.gradient) // indigo = brand identity only
-            VStack(alignment: .leading, spacing: Design.xs) {
-                Text("Night Conductor").font(.headline)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                .font(.system(size: 30))
+                .foregroundStyle(.white.opacity(0.22)) // atmospheric brand mark
+                .padding(Design.l)
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: Design.xs) {
+                    Text("Night Conductor")
+                        .font(.system(.title3, design: .serif).weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text(subtitle).font(.caption).foregroundStyle(.white.opacity(0.7))
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: Design.xs) {
+                    Toggle("Arm night watch", isOn: Binding(
+                        get: { state.armed },
+                        set: { state.armed = $0 }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .tint(.green)
+                    .help("Arm or disarm the night watch")
+                    Text(state.armed ? "ARMED" : "PAUSED")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(state.armed ? Color.green : .white.opacity(0.6))
+                }
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: Design.xs) {
-                Toggle("Arm night watch", isOn: Binding(
-                    get: { state.armed },
-                    set: { state.armed = $0 }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .help("Arm or disarm the night watch")
-                Text(state.armed ? "ARMED" : "PAUSED")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(state.armed ? Color.green : .secondary)
-            }
+            .padding(Design.l)
+            .frame(maxHeight: .infinity, alignment: .bottom)
         }
+        .frame(height: 96)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private var subtitle: String {
@@ -114,15 +131,17 @@ struct MenuView: View {
 
     private var decisionRow: some View {
         HStack(spacing: Design.m) {
-            Circle()
-                .fill(decisionColor)
-                .frame(width: 8, height: 8)
+            Image(systemName: decisionIcon)
+                .foregroundStyle(decisionColor)
             Text(state.decision?.reason ?? "Waiting for first check…")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.callout)
+                .foregroundStyle(.primary.opacity(0.85))
                 .lineLimit(2)
         }
-        .cardSurface()
+        .padding(Design.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(decisionColor.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: Design.cardRadius))
     }
 
     private var decisionColor: Color {
@@ -130,19 +149,29 @@ struct MenuView: View {
         return decision.resume ? .green : .orange
     }
 
+    private var decisionIcon: String {
+        guard let decision = state.decision else { return "clock" }
+        return decision.resume ? "checkmark.circle.fill" : "pause.circle.fill"
+    }
+
     @ViewBuilder
     private var stalledSection: some View {
         if state.stalled.isEmpty {
-            HStack(spacing: 8) {
-                Image(systemName: "zzz").foregroundStyle(.tertiary)
+            HStack(spacing: Design.m) {
+                Image(systemName: "moon.zzz.fill").foregroundStyle(.secondary)
                 Text("No stalled sessions — all quiet")
-                    .font(.caption).foregroundStyle(.tertiary)
+                    .font(.callout).foregroundStyle(.secondary)
             }
+            .padding(.vertical, Design.s)
         } else {
             VStack(alignment: .leading, spacing: Design.m) {
-                Text("STALLED AT THE LIMIT · \(state.stalled.count)")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("Stalled at the limit").font(.headline)
+                    Spacer()
+                    Text("\(state.stalled.count)")
+                        .font(.caption.weight(.bold).monospacedDigit())
+                        .foregroundStyle(.orange)
+                }
                 // Bounded height so a long stalled list can't push the
                 // popover past the screen; scrolls past ~4 rows.
                 ScrollView {
@@ -150,11 +179,12 @@ struct MenuView: View {
                         ForEach(state.stalled) { session in
                             HStack(spacing: Design.m) {
                                 Image(systemName: "pause.circle.fill")
-                                    .foregroundStyle(.orange)
+                                    .font(.title3)
+                                    .foregroundStyle(.orange.gradient)
                                 VStack(alignment: .leading, spacing: Design.xs) {
-                                    Text(session.title).font(.callout).lineLimit(1)
+                                    Text(session.title).font(.body).lineLimit(1)
                                     Text(session.workspaceName)
-                                        .font(.caption2).foregroundStyle(.secondary)
+                                        .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                             }
@@ -167,9 +197,16 @@ struct MenuView: View {
                     Task { await state.tick(manual: true) }
                 } label: {
                     Label("Resume now", systemImage: "play.fill")
+                        .font(.body.weight(.semibold))
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, Design.m)
+                        .background(
+                            (state.isWorking ? Color.gray : Color.indigo).gradient,
+                            in: RoundedRectangle(cornerRadius: Design.cardRadius)
+                        )
+                        .foregroundStyle(.white)
                 }
-                .controlSize(.small)
+                .buttonStyle(.plain)
                 .disabled(state.isWorking)
                 .help("Bypasses the night schedule, never the budget gates")
             }
@@ -280,13 +317,13 @@ struct UsageMeter: View {
     }
 
     var body: some View {
-        VStack(spacing: Design.s) {
+        VStack(spacing: Design.m) {
             HStack {
-                Text(label).font(.caption)
+                Text(label).font(.subheadline.weight(.medium))
                 Spacer()
-                Text(resetText).font(.caption2).foregroundStyle(.secondary)
+                Text(resetText).font(.caption).foregroundStyle(.secondary)
                 Text(window == nil ? "–" : "\(Int(value))%")
-                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .font(.subheadline.weight(.bold).monospacedDigit())
             }
             // Custom bar with an explicit semantic fill. macOS's
             // ProgressView(.linear) ignores .tint in some render contexts,
@@ -295,11 +332,11 @@ struct UsageMeter: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.secondary.opacity(0.2))
                     Capsule()
-                        .fill(Color.usageStatus(value))
-                        .frame(width: max(4, geo.size.width * min(value, 100) / 100))
+                        .fill(Color.usageStatus(value).gradient)
+                        .frame(width: max(6, geo.size.width * min(value, 100) / 100))
                 }
             }
-            .frame(height: 6)
+            .frame(height: 10)
         }
     }
 }
