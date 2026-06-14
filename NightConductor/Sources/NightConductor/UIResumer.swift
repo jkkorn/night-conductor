@@ -14,12 +14,15 @@ enum UIResumer {
 
     static var hasAccessibilityPermission: Bool { AXIsProcessTrusted() }
 
-    /// Shows the system prompt that deep-links to the Accessibility pane.
-    static func requestPermission() {
-        let options = [
-            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
-        ] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
+    /// Opens System Settings → Privacy & Security → Accessibility directly,
+    /// on the user's terms. We deliberately do NOT call the TCC prompt
+    /// (AXIsProcessTrustedWithOptions) — it re-nags on every relaunch and
+    /// won't re-show once denied; the deep link always works.
+    static func openAccessibilitySettings() {
+        let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        )!
+        NSWorkspace.shared.open(url)
     }
 
     static func resume(session: StalledSession) -> ResumeResult {
