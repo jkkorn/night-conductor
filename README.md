@@ -55,13 +55,16 @@ That's the whole install. Then:
 3. In settings (⚙): enable **Launch at login**.
 4. First run only: macOS asks to allow Keychain access — click **Always Allow**.
 
-One thing the app can't do for you — your Mac must be awake at night:
+### Staying awake at night
 
-```bash
-sudo pmset repeat wakeorpoweron MTWRFSU 23:00:00
-```
+Night Conductor **keeps your Mac awake by itself** while the watch is armed and
+in its window (a power assertion — no command, no password). So if your Mac is
+on when you go to bed, you're done.
 
-(or keep it plugged in with `sudo pmset -c sleep 0`)
+If your Mac is *fully asleep* before the watch starts, the firmware has to wake
+it — open settings (⚙) and tap **Nightly wake** (it uses your start hour and
+asks for your password once). No hardcoded command, and it follows whatever
+hours you set.
 
 ## The interface
 
