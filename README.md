@@ -103,6 +103,10 @@ ways to handle them without waiting for bedtime:
 The unpinned sessions still wait for the night window, so a busy day doesn't
 quietly drain your weekly budget.
 
+Overnight, resumes are **spaced out** — one per cycle with a jittered ~6–14
+minute gap — so the night's budget trickles across the window instead of
+bursting all at once.
+
 ## Works across every harness
 
 Night Conductor is harness-agnostic — stalled sessions from all three show

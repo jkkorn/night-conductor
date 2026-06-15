@@ -78,9 +78,10 @@ final class AppState: ObservableObject {
         }
         resumeLoop = Task { [weak self] in
             while !Task.isCancelled {
-                // The view loop already did the first refresh; wait one
-                // resume interval before the first resume attempt.
-                try? await Task.sleep(for: .seconds(Self.resumeInterval))
+                // Jittered gap between resume attempts so the night's resumes
+                // spread out (and don't sync to a robotic 10-min beat).
+                let gap = Self.resumeInterval * Double.random(in: 0.6...1.4) // ~6–14 min
+                try? await Task.sleep(for: .seconds(gap))
                 await self?.resumeTick()
             }
         }
@@ -338,28 +339,19 @@ final class AppState: ObservableObject {
                 ))
             }
 
-            // An in-app resume hands off and returns immediately, so its cost
-            // isn't measurable yet. One per tick keeps the budget honest.
+            // Spread it out: an auto pass resumes ONE session per tick, so the
+            // night's budget trickles out across the window instead of
+            // bursting. The next (jittered) tick re-checks budget and takes
+            // the next session. A manual pass keeps going through the list.
             if handedToApp {
-                log("Handed to \(session.source.label) — next session at the next resume cycle")
+                log("Handed to \(session.source.label) — next session shortly")
                 break
             }
-
-            // Auto only: a long agentic run can eat a big chunk of the 5h
-            // window, so re-check the budget before the next session. A
-            // manual pass is your explicit call and isn't budget-gated.
-            if !manual {
-                guard await refreshUsage(force: true), let fresh = usage else {
-                    log("⚠️ Usage unavailable — stopping")
-                    break
-                }
-                let next = Policy.budgetAllows(usage: fresh, config: config, now: Date())
-                decision = next
-                if !next.resume {
-                    log("Pausing: \(next.reason)")
-                    break
-                }
+            if result.ok, !manual {
+                log("Resumed \(session.title) — spacing out, next at the next cycle")
+                break
             }
+            // Otherwise (failed, or a manual headless run) try the next now.
         }
         stalled = await combinedStalled()
     }
