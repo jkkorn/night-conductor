@@ -161,7 +161,8 @@ section, or increase the rehide interval.
 
 Made with ❤️ in Brazil by [Jonathan Korn](https://www.linkedin.com/in/jkkorn).
 Built because I love [Conductor](https://conductor.build) and kept hitting my
-limits at midnight.
+limits at midnight. If it saved your night,
+[buy me a coffee](https://buymeacoffee.com/jkkorn) ☕.
 
 ## License
 

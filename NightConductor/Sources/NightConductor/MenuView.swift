@@ -1,9 +1,9 @@
 import ServiceManagement
 import SwiftUI
 
-// Confirm this is right — it ships inside the app's About line.
 enum AboutLinks {
     static let linkedIn = URL(string: "https://www.linkedin.com/in/jkkorn")!
+    static let buyMeACoffee = URL(string: "https://buymeacoffee.com/jkkorn")!
 }
 
 /// Design tokens — one 4pt spacing scale and one card surface, so spacing
@@ -70,6 +70,13 @@ struct MenuView: View {
     private var header: some View {
         ZStack(alignment: .topTrailing) {
             NightSkyView(armed: state.armed)
+            // Scrim: darkens the top (moon/toggle) and bottom (wordmark) so
+            // white content stays legible even on the bright daytime sky,
+            // while the middle keeps the sky's color.
+            LinearGradient(
+                colors: [.black.opacity(0.30), .black.opacity(0.0), .black.opacity(0.50)],
+                startPoint: .top, endPoint: .bottom
+            )
             GlowingMoon(armed: state.armed)
                 .padding(Design.l)
             HStack(alignment: .bottom) {
@@ -80,7 +87,8 @@ struct MenuView: View {
                         .shadow(color: .black.opacity(0.35), radius: 6, y: 1)
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.72))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .shadow(color: .black.opacity(0.3), radius: 4, y: 1)
                         .contentTransition(.opacity)
                 }
                 Spacer()
@@ -316,7 +324,9 @@ extension MenuView {
         HStack(spacing: 4) {
             Spacer()
             Text("Made with ❤️ in Brazil by")
-            Link("Jonathan Korn", destination: AboutLinks.linkedIn)
+            Link("Jonathan Korn", destination: AboutLinks.linkedIn).underline()
+            Text("·").foregroundStyle(.tertiary)
+            Link("Buy me a coffee", destination: AboutLinks.buyMeACoffee).underline()
             Spacer()
         }
         .font(.caption2)
