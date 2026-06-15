@@ -63,6 +63,7 @@ struct MenuView: View {
         }
         .padding(Design.l)
         .frame(width: 340)
+        .onAppear { Task { await state.refreshUsage(force: false) } } // fresh when opened (throttled)
     }
 
     // Living night-sky header: a drifting aurora + twinkling starfield, with

@@ -27,6 +27,9 @@ final class AppState: ObservableObject {
     private var viewLoop: Task<Void, Never>?
     private var resumeLoop: Task<Void, Never>?
     private var lastUsageFetchAt: Date?
+    private var usageBackoffUntil: Date?   // set on a 429, grows exponentially
+    private var usageBackoffStep = 0
+    private var usageJitter: Double = 0     // randomized offset so polls desync
     private var lastInWindow: Bool?
     private var lastClaudeCodeScan: Date?
     private var cachedClaudeCode: [StalledSession] = []
@@ -66,6 +69,7 @@ final class AppState: ObservableObject {
     func start() {
         viewLoop?.cancel()
         resumeLoop?.cancel()
+        Task { [weak self] in await self?.refreshUsage(force: true) } // populate meters once at launch
         viewLoop = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refreshView()
@@ -106,44 +110,66 @@ final class AppState: ObservableObject {
         return all
     }
 
-    /// Refresh the display. `forceUsage` bypasses the cache (used right
-    /// before a resume so budget gates see current data). Returns whether we
-    /// have a fresh-enough usage reading to act on. Never resumes.
+    /// Cheap 30s refresh: scan stalled sessions and recompute the decision
+    /// from the CACHED usage. Deliberately does NOT hit the usage API — that
+    /// endpoint is rate-limited, so we fetch it lazily (before a resume, when
+    /// the popover opens, at launch) via `refreshUsage`.
     @discardableResult
-    func refreshView(forceUsage: Bool = false) async -> Bool {
+    func refreshView() async -> Bool {
         let config = PolicyConfig.fromDefaults()
-        // Hold the Mac awake while the watch is armed and in its window.
         let inWindow = Policy.inActiveHours(
             hour: Calendar.current.component(.hour, from: Date()),
             start: config.startHour, end: config.endHour
         )
         PowerManager.preventIdleSleep(armed && inWindow)
         checkMorningSummary(inWindow: inWindow, config: config)
-
         stalled = await combinedStalled()
-        defer { lastTick = Date() }
+        lastTick = Date()
+        return recomputeDecision(config: config)
+    }
 
-        // Re-fetch usage only when forced or the cache is older than the
-        // refresh interval — the API 429s if polled every 30s.
-        let age = Date().timeIntervalSince(lastUsageFetchAt ?? .distantPast)
-        if forceUsage || usage == nil || age > Self.usageRefreshInterval {
-            if let fresh = try? await UsageClient.fetchUsage() {
-                usage = fresh
+    /// Fetch usage with three guards against rate-limiting the shared `/usage`
+    /// endpoint: a cache window, randomized jitter (so we don't sync up with
+    /// Conductor / Claude Code / Claude Desktop polling the same endpoint),
+    /// and exponential backoff on a 429. Returns whether usage is fresh
+    /// enough to act on.
+    @discardableResult
+    func refreshUsage(force: Bool) async -> Bool {
+        let now = Date()
+        let inBackoff = (usageBackoffUntil.map { now < $0 }) ?? false
+        let age = now.timeIntervalSince(lastUsageFetchAt ?? .distantPast)
+        let threshold = Self.usageRefreshInterval + usageJitter
+        if !inBackoff, force || usage == nil || age > threshold {
+            do {
+                usage = try await UsageClient.fetchUsage()
                 lastUsageFetchAt = Date()
-            } else if forceUsage {
-                // About to resume but can't confirm budget → fail closed.
-                if usage == nil {
-                    decision = Decision(resume: false, reason: "Can't read usage — holding")
-                }
-                return false
+                usageBackoffUntil = nil
+                usageBackoffStep = 0
+                usageJitter = Double(Int.random(in: 0...45)) // re-roll for next time
+            } catch let error as UsageError where error.isRateLimited {
+                let delays = [300.0, 600.0, 1200.0, 1800.0] // 5, 10, 20, 30 min
+                usageBackoffStep = min(usageBackoffStep + 1, delays.count)
+                usageBackoffUntil = now.addingTimeInterval(delays[usageBackoffStep - 1])
+                log("Usage rate-limited — backing off \(Int(delays[usageBackoffStep - 1] / 60))m")
+            } catch {
+                // transient / network — keep the cached reading
             }
-            // Not forced and fetch failed → keep the cached reading.
         }
+        _ = recomputeDecision(config: PolicyConfig.fromDefaults())
+        return usageIsFresh(now)
+    }
 
-        let freshness = Date().timeIntervalSince(lastUsageFetchAt ?? .distantPast)
-        if let snapshot = usage, freshness <= Self.usageStaleAfter {
+    func usageIsFresh(_ now: Date = Date()) -> Bool {
+        guard usage != nil, let at = lastUsageFetchAt else { return false }
+        return now.timeIntervalSince(at) <= Self.usageStaleAfter
+    }
+
+    @discardableResult
+    private func recomputeDecision(config: PolicyConfig) -> Bool {
+        let now = Date()
+        if let snapshot = usage, usageIsFresh(now) {
             decision = Policy.shouldResume(
-                usage: snapshot, config: config, now: Date(), ignoreActiveHours: false
+                usage: snapshot, config: config, now: now, ignoreActiveHours: false
             )
             return true
         }
@@ -156,7 +182,9 @@ final class AppState: ObservableObject {
 
     /// The budget-gated resume pass, run on the slower resume loop.
     func resumeTick() async {
-        guard await refreshView(forceUsage: true) else { return }
+        await refreshView()
+        // Fresh usage required to auto-resume (respects backoff; fail closed).
+        guard await refreshUsage(force: true) else { return }
         guard armed, let usage else { return }
         let config = PolicyConfig.fromDefaults()
         let now = Date()
@@ -178,6 +206,7 @@ final class AppState: ObservableObject {
         isWorking = true
         defer { isWorking = false }
         await refreshView() // best-effort display refresh; never gates the resume
+        await refreshUsage(force: false) // freshen the meters (throttled), non-blocking
         guard !stalled.isEmpty else { log("Nothing stalled to resume right now"); return }
         let config = PolicyConfig.fromDefaults()
         await resumeStalledSessions(sessions: stalled, config: config, manual: manual)
@@ -320,11 +349,10 @@ final class AppState: ObservableObject {
             // window, so re-check the budget before the next session. A
             // manual pass is your explicit call and isn't budget-gated.
             if !manual {
-                guard let fresh = try? await UsageClient.fetchUsage() else {
-                    log("⚠️ Usage re-check failed — stopping")
+                guard await refreshUsage(force: true), let fresh = usage else {
+                    log("⚠️ Usage unavailable — stopping")
                     break
                 }
-                usage = fresh
                 let next = Policy.budgetAllows(usage: fresh, config: config, now: Date())
                 decision = next
                 if !next.resume {

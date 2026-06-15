@@ -3,15 +3,19 @@ import Foundation
 enum UsageError: LocalizedError {
     case keychain(String)
     case network(String)
+    case rateLimited
     case badPayload
 
     var errorDescription: String? {
         switch self {
         case .keychain(let m): return "Keychain: \(m)"
         case .network(let m): return "Network: \(m)"
+        case .rateLimited: return "Usage endpoint rate-limited (429)"
         case .badPayload: return "Unexpected usage API payload"
         }
     }
+
+    var isRateLimited: Bool { if case .rateLimited = self { return true }; return false }
 }
 
 /// Reads the OAuth token Claude Code stores in the macOS Keychain and asks
@@ -69,8 +73,9 @@ enum UsageClient {
         } catch {
             throw UsageError.network(error.localizedDescription)
         }
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+        let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if code == 429 { throw UsageError.rateLimited }
+        guard code == 200 else {
             throw UsageError.network("usage endpoint returned \(code)")
         }
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
