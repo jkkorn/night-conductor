@@ -28,6 +28,8 @@ final class AppState: ObservableObject {
     private var resumeLoop: Task<Void, Never>?
     private var lastUsageFetchAt: Date?
     private var lastInWindow: Bool?
+    private var lastClaudeCodeScan: Date?
+    private var cachedClaudeCode: [StalledSession] = []
     // Guards against the resume loop and the manual "Resume now" button
     // running a resume pass at the same time (which could double-run a
     // session and bypass the per-night caps).
@@ -80,17 +82,27 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Cheap, frequent refresh of what the popover shows. Never resumes.
-    /// The stalled list comes from a local DB read, so it stays fresh even
-    /// when the network is down (usage failure holds, but doesn't wipe it).
-    /// Returns whether *fresh* usage was obtained — callers must not resume
-    /// on a stale snapshot (fail closed).
-    /// Stalled sessions from every supported source (Conductor + Claude
-    /// Desktop). Conductor's DB read can throw; Claude Desktop returns [].
-    private func scanStalled() -> [StalledSession] {
-        var all: [StalledSession] = []
-        if let conductor = try? ConductorDB.findStalledSessions() { all += conductor }
-        all += ClaudeDesktopDB.findStalledSessions()
+    /// Stalled sessions from all sources, scanned off the main thread.
+    /// Conductor + Claude Desktop are cheap and run every call; the terminal
+    /// transcript scan is heavier, so it's throttled and cached. Standalone
+    /// transcripts also contain Conductor / Claude Desktop sessions, so we
+    /// dedupe by Claude session id — the richer in-app source wins.
+    private func combinedStalled() async -> [StalledSession] {
+        var all = await Task.detached(priority: .utility) { () -> [StalledSession] in
+            var a: [StalledSession] = []
+            if let conductor = try? ConductorDB.findStalledSessions() { a += conductor }
+            a += ClaudeDesktopDB.findStalledSessions()
+            return a
+        }.value
+
+        if Date().timeIntervalSince(lastClaudeCodeScan ?? .distantPast) > 120 {
+            cachedClaudeCode = await Task.detached(priority: .utility) {
+                ClaudeCodeDB.findStalledSessions()
+            }.value
+            lastClaudeCodeScan = Date()
+        }
+        let seen = Set(all.map(\.claudeSessionID))
+        all += cachedClaudeCode.filter { !seen.contains($0.claudeSessionID) }
         return all
     }
 
@@ -108,7 +120,7 @@ final class AppState: ObservableObject {
         PowerManager.preventIdleSleep(armed && inWindow)
         checkMorningSummary(inWindow: inWindow, config: config)
 
-        stalled = scanStalled()
+        stalled = await combinedStalled()
         defer { lastTick = Date() }
 
         // Re-fetch usage only when forced or the cache is older than the
@@ -236,6 +248,15 @@ final class AppState: ObservableObject {
                         Resumer.resume(session: session, claudePath: claudePath, config: config)
                     }.value
                 }
+            case .claudeCode:
+                // Terminal sessions aren't sandboxed → headless is faithful.
+                if let claudePath = await claudeBinary() {
+                    result = await Task.detached(priority: .utility) {
+                        Resumer.resume(session: session, claudePath: claudePath, config: config)
+                    }.value
+                } else {
+                    result = ResumeResult(ok: false, detail: "claude CLI not found")
+                }
             }
 
             currentlyResuming = nil
@@ -278,7 +299,7 @@ final class AppState: ObservableObject {
                 break
             }
         }
-        stalled = scanStalled()
+        stalled = await combinedStalled()
     }
 
     /// When the watch window ends (the user's wake hour), post one morning

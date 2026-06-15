@@ -46,6 +46,9 @@ enum Main {
             for s in conductor { print("  - \(s.title) [\(s.kind.shortLabel)] @ \(s.workspaceName)") }
             print("Claude Desktop stalled: \(claude.count)")
             for s in claude { print("  - \(s.title) [\(s.kind.shortLabel)] @ \(s.workspaceName)") }
+            let cc = ClaudeCodeDB.findStalledSessions()
+            print("Claude Code (terminal) stalled: \(cc.count)")
+            for s in cc { print("  - \(s.title) [\(s.kind.shortLabel)] @ \(s.workspaceName)") }
             return
         }
         NightConductorApp.main()

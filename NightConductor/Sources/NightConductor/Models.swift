@@ -47,11 +47,13 @@ enum StallKind: Equatable {
 enum SessionSource: String, Equatable {
     case conductor
     case claudeDesktop
+    case claudeCode
 
     var label: String {
         switch self {
         case .conductor: return "Conductor"
         case .claudeDesktop: return "Claude"
+        case .claudeCode: return "Terminal"
         }
     }
 }

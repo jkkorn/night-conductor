@@ -90,13 +90,18 @@ python3 -m autoconduct status     # usage, stalled sessions, decision
 python3 -m autoconduct install    # launchd agent, ticks every 10 min
 ```
 
-## Works with Claude Desktop too
+## Works across every harness
 
-Night Conductor also watches the **Claude desktop app's "Cowork" sessions**.
-Stalled ones show up in the same list (badged `Claude`) and are resumed the
-faithful way — by pressing Claude Desktop's own Retry, so the run stays
-inside its sandbox (no headless fallback there, on purpose). Conductor
-sessions still get the headless fallback.
+Night Conductor is harness-agnostic — stalled sessions from all three show
+up in one list, badged by source, each resumed the faithful way:
+
+| Source | Badge | How it resumes |
+|--------|-------|----------------|
+| Conductor | `Conductor` | presses Conductor's Retry (UI), headless fallback |
+| Claude desktop app (Cowork) | `Claude` | presses Claude Desktop's Retry — stays in its sandbox, no headless fallback |
+| Standalone Claude Code (terminal) | `Terminal` | headless `claude --resume` (these aren't sandboxed, so it's faithful) |
+
+Sessions that appear in more than one place are de-duplicated by session id.
 
 ## Morning summary & weekly stats
 
