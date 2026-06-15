@@ -24,7 +24,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
     <key>CFBundleShortVersionString</key><string>1.0.0</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
-    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHumanReadableCopyright</key><string>MIT License</string>
 </dict>
@@ -43,8 +43,18 @@ for s in 16 32 128 256 512; do
 done
 iconutil -c icns -o "$APP_DIR/Contents/Resources/AppIcon.icns" "$ICONSET"
 
-echo "▸ Signing (ad-hoc)…"
-codesign --force -s - "$APP_DIR"
+# Sign with Developer ID + hardened runtime when a cert is available (so
+# release builds notarize); otherwise ad-hoc, so anyone can still build.
+# Override the identity with SIGN_IDENTITY=...; set SIGN_IDENTITY=- to force ad-hoc.
+IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null \
+    | grep "Developer ID Application" | head -1 | awk '{print $2}')}"
+if [ -n "$IDENTITY" ] && [ "$IDENTITY" != "-" ]; then
+    echo "▸ Signing (Developer ID: $IDENTITY, hardened runtime)…"
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_DIR"
+else
+    echo "▸ Signing (ad-hoc — no Developer ID cert found)…"
+    codesign --force -s - "$APP_DIR"
+fi
 
 echo ""
 echo "✓ Built: $PWD/$APP_DIR"
