@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Conductor — resume your Conductor sessions while you sleep</title>
+<meta name="description" content="A tiny macOS menu bar app that resumes Conductor sessions which hit the Claude usage limit overnight — without blowing your weekly budget.">
+<meta property="og:title" content="Night Conductor">
+<meta property="og:description" content="Your Conductor sessions hit the Claude limit at 11pm. Night Conductor resumes them while you sleep.">
+<meta property="og:image" content="popover.png">
+<style>
+  :root { --bg:#07070d; --card:#12121a; --line:#23232e; --ink:#ECECF2; --dim:#9A9AA6; --accent:#7c7cf0; --green:#34c759; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:
+      radial-gradient(1200px 600px at 70% -10%, #1a1640 0%, transparent 60%),
+      var(--bg); color:var(--ink);
+      font:16px/1.6 -apple-system, system-ui, "SF Pro Text", sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  header { text-align:center; padding: 72px 0 28px; }
+  h1 { font-family: ui-serif, Georgia, "Times New Roman", serif; font-weight:600;
+       font-size: clamp(40px, 7vw, 68px); margin: 0 0 12px; letter-spacing:-0.01em; }
+  .tag { font-size: clamp(18px, 2.6vw, 22px); color: var(--dim); max-width: 640px; margin: 0 auto 28px; }
+  .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top: 22px; }
+  .btn { display:inline-block; padding: 12px 22px; border-radius: 12px; font-weight:600; text-decoration:none; }
+  .btn.primary { background: linear-gradient(180deg,#8a8af6,#6a6ae6); color:white; box-shadow:0 8px 30px rgba(124,124,240,.35); }
+  .btn.ghost { color: var(--ink); border:1px solid var(--line); }
+  .hero-img { display:block; margin: 40px auto 8px; width: 340px; max-width: 88%;
+              border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+  .cap { text-align:center; color: var(--dim); font-size: 14px; }
+  section { padding: 40px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 26px; margin: 0 0 18px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 18px; }
+  .feature { background: var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .feature h3 { margin:0 0 6px; font-size:17px; }
+  .feature p { margin:0; color: var(--dim); font-size:14.5px; }
+  pre { background:#0c0c14; border:1px solid var(--line); border-radius:12px; padding:16px; overflow:auto; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13.5px; }
+  .shots { display:flex; gap:20px; justify-content:center; flex-wrap:wrap; }
+  .shots img { width: 300px; max-width: 90%; border-radius: 14px; border:1px solid var(--line); }
+  footer { text-align:center; color: var(--dim); padding: 40px 0 64px; font-size: 14px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🌙 Night Conductor</h1>
+    <p class="tag">Your <a href="https://conductor.build">Conductor</a> sessions hit the Claude
+      usage limit at 11pm. Night Conductor resumes them while you sleep — without blowing your weekly budget.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/jkkorn/Night-Conductor#install-the-for-dummies-path">Get it</a>
+      <a class="btn ghost" href="https://github.com/jkkorn/Night-Conductor">View on GitHub</a>
+    </div>
+    <img class="hero-img" src="day-cycle.gif" alt="Night Conductor popover, sky shifting with the time of day">
+    <p class="cap">The header is a living sky that follows the real clock.</p>
+  </header>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="grid">
+      <div class="feature"><h3>Watches while you sleep</h3><p>Every few minutes during your sleep window it scans for sessions stalled at the limit.</p></div>
+      <div class="feature"><h3>Budget-aware</h3><p>Resumes only when there's headroom — 5h + weekly ceilings, plus a pacing guard so it never burns the week too fast.</p></div>
+      <div class="feature"><h3>Morning protection</h3><p>Never starts a session within 5 hours of when you're back, so your window is fresh when you sit down.</p></div>
+      <div class="feature"><h3>Resumes in Conductor</h3><p>Presses Conductor's own Retry via Accessibility, so the chat stays in sync — headless fallback if needed.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Install</h2>
+    <p>Requires macOS 15+, <a href="https://conductor.build">Conductor</a>, and
+       <a href="https://claude.com/claude-code">Claude Code</a> logged in.</p>
+    <pre><code>git clone https://github.com/jkkorn/Night-Conductor.git
+cd Night-Conductor/NightConductor
+./build-app.sh
+# drag dist/Night Conductor.app into /Applications</code></pre>
+  </section>
+
+  <section>
+    <h2>Screens</h2>
+    <div class="shots">
+      <img src="popover.png" alt="Popover">
+      <img src="settings.png" alt="Settings">
+    </div>
+  </section>
+
+  <footer>
+    Made with ❤️ in Brazil by <a href="https://www.linkedin.com/in/jkkorn">Jonathan Korn</a> ·
+    Open source (MIT) · Not affiliated with Conductor or Anthropic
+  </footer>
+</div>
+</body>
+</html>

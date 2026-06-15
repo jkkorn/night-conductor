@@ -6,7 +6,8 @@
 11pm. Night Conductor resumes them while you sleep — without blowing your
 weekly budget.**
 
-<p align="center"><img src="docs/popover.png" width="340" alt="Night Conductor popover: usage meters, budget decision, stalled sessions"></p>
+<p align="center"><img src="docs/day-cycle.gif" width="340" alt="Night Conductor popover — the header sky shifts with the time of day"></p>
+<p align="center"><em>The header is a living sky that follows the real clock — dusk, midnight, dawn.</em></p>
 
 A tiny macOS menu bar app. A moon lives in your menu bar. While you sleep, it
 watches your stalled Conductor sessions and your live Claude usage, and resumes
@@ -88,6 +89,20 @@ tinkerers — see [`autoconduct/`](autoconduct/):
 python3 -m autoconduct status     # usage, stalled sessions, decision
 python3 -m autoconduct install    # launchd agent, ticks every 10 min
 ```
+
+## Raycast extension
+
+A companion [Raycast](https://raycast.com) extension lives in
+[`raycast/`](raycast/): a menu-bar command for live usage + stalled count,
+and a list view to resume stalled sessions — reading the same Conductor DB
+and usage endpoint.
+
+```bash
+cd raycast && npm install && npm run dev
+```
+
+It's a companion, not a replacement: the unattended overnight watching stays
+in the menu bar app; Raycast gives you the quick glance and manual resume.
 
 ## Good to know
 

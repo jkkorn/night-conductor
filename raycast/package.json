@@ -1,0 +1,42 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "night-conductor",
+  "title": "Night Conductor",
+  "description": "Glance at your Claude usage and resume Conductor sessions that hit the limit.",
+  "icon": "extension-icon.png",
+  "author": "jkkorn",
+  "categories": ["Developer Tools"],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "menubar",
+      "title": "Usage & Stalled Sessions",
+      "description": "Menu bar: live Claude usage and Conductor sessions stalled at the limit.",
+      "mode": "menu-bar",
+      "interval": "10m"
+    },
+    {
+      "name": "stalled",
+      "title": "Stalled Sessions",
+      "description": "List Conductor sessions stalled at the limit and resume them.",
+      "mode": "view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.80.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^1.0.11",
+    "@types/node": "^20.8.10",
+    "@types/react": "^18.3.3",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.4.5"
+  },
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "lint": "ray lint",
+    "fix-lint": "ray lint --fix"
+  }
+}
