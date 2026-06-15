@@ -90,6 +90,19 @@ python3 -m autoconduct status     # usage, stalled sessions, decision
 python3 -m autoconduct install    # launchd agent, ticks every 10 min
 ```
 
+## Auto-resume by day, too
+
+The night window is the default, but stalls happen during work hours. Two
+ways to handle them without waiting for bedtime:
+
+- **Pin a session** (the ⟳ on each stalled row) — it auto-resumes **around
+  the clock**, budget permitting, not just at night.
+- **Resume now** — your explicit call; resumes immediately, bypassing the
+  schedule and budget gates (only Anthropic's real limit can stop it).
+
+The unpinned sessions still wait for the night window, so a busy day doesn't
+quietly drain your weekly budget.
+
 ## Works across every harness
 
 Night Conductor is harness-agnostic — stalled sessions from all three show

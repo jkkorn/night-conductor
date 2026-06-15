@@ -108,7 +108,7 @@ enum Screenshotter {
         state.decision = name == "high"
             ? Decision(resume: false, reason: "5-hour window at 88% (ceiling 85%)")
             : Decision(resume: true, reason: "Wiggle room: 29% of week used, 1.6 days to reset")
-        state.stalled = name == "empty" ? [] : [
+        let base = [
             StalledSession(
                 sessionID: "demo-1", claudeSessionID: "demo-1",
                 title: "Refactor onboarding flow", workspacePath: "/ws/myapp/oslo",
@@ -122,6 +122,24 @@ enum Screenshotter {
                 stalledAt: now.addingTimeInterval(-25 * 60)
             ),
         ]
+        switch name {
+        case "empty": state.stalled = []
+        case "many":
+            let titles = ["Refactor onboarding flow", "Fix paywall A/B variants",
+                          "Migrate auth to OAuth", "Add dark mode", "Write E2E tests",
+                          "Optimize image pipeline", "Fix flaky CI", "Bump dependencies"]
+            state.stalled = titles.enumerated().map { i, t in
+                StalledSession(
+                    sessionID: "demo-\(i)", claudeSessionID: "demo-\(i)", title: t,
+                    workspacePath: "/ws/myapp/\(["oslo", "dallas", "lima", "cebu"][i % 4])",
+                    errorText: i % 3 == 0
+                        ? "API Error: Server is temporarily limiting requests (not your usage limit)"
+                        : "You've hit your session limit · resets 1:30am",
+                    stalledAt: now
+                )
+            }
+        default: state.stalled = base
+        }
         state.lastTick = now
         return state
     }

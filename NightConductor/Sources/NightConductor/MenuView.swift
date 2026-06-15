@@ -44,6 +44,7 @@ struct MenuView: View {
     @EnvironmentObject var state: AppState
     @State private var showSettings: Bool
     @State private var showActivity = false
+    private let maxStalledRows = 6 // render this many; the rest auto-resume
 
     init(showSettings: Bool = false) {
         _showSettings = State(initialValue: showSettings)
@@ -74,7 +75,7 @@ struct MenuView: View {
             // white content stays legible even on the bright daytime sky,
             // while the middle keeps the sky's color.
             LinearGradient(
-                colors: [.black.opacity(0.30), .black.opacity(0.0), .black.opacity(0.50)],
+                colors: [.black.opacity(0.22), .black.opacity(0.0), .black.opacity(0.40)],
                 startPoint: .top, endPoint: .bottom
             )
             GlowingMoon(armed: state.armed)
@@ -187,49 +188,18 @@ struct MenuView: View {
                         .font(.caption.weight(.bold).monospacedDigit())
                         .foregroundStyle(.orange)
                 }
-                // Bounded height so a long stalled list can't push the
-                // popover past the screen; scrolls past ~4 rows.
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Design.m) {
-                        ForEach(state.stalled) { session in
-                            let accent: Color = session.kind == .transient ? .yellow : .orange
-                            HStack(spacing: Design.m) {
-                                Image(systemName: session.kind.icon)
-                                    .font(.title3)
-                                    .foregroundStyle(accent.gradient)
-                                VStack(alignment: .leading, spacing: Design.xs) {
-                                    Text(session.title).font(.body).lineLimit(1)
-                                    HStack(spacing: Design.s) {
-                                        Text(session.workspaceName)
-                                            .font(.caption).foregroundStyle(.secondary)
-                                        Text(session.source.label)
-                                            .font(.caption2.weight(.medium))
-                                            .foregroundStyle(.secondary)
-                                            .padding(.horizontal, 5)
-                                            .padding(.vertical, 1)
-                                            .background(.secondary.opacity(0.15), in: Capsule())
-                                        Text(session.kind.shortLabel)
-                                            .font(.caption2.weight(.medium))
-                                            .foregroundStyle(accent)
-                                            .padding(.horizontal, 5)
-                                            .padding(.vertical, 1)
-                                            .background(accent.opacity(0.15), in: Capsule())
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(.vertical, 2)
-                            .contentShape(Rectangle())
-                            .hoverLift()
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .top).combined(with: .opacity),
-                                removal: .opacity
-                            ))
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Render rows directly (a ScrollView collapses to zero height
+                // in a self-sizing popover). Cap the count; the rest auto-
+                // resume on their own cadence.
+                ForEach(state.stalled.prefix(maxStalledRows)) { session in
+                    stalledRow(session)
                 }
-                .frame(maxHeight: state.stalled.count > 4 ? 160 : .infinity)
+                if state.stalled.count > maxStalledRows {
+                    Text("+ \(state.stalled.count - maxStalledRows) more — pin the ones you want resumed by day")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 2)
+                }
                 Button {
                     Task { await state.tick(manual: true) }
                 } label: {
@@ -239,9 +209,51 @@ struct MenuView: View {
                 }
                 .buttonStyle(GlowButtonStyle(disabled: state.isWorking))
                 .disabled(state.isWorking)
-                .help("Bypasses the night schedule, never the budget gates")
+                .help("Resumes now — bypasses the schedule and budget gates")
             }
         }
+    }
+
+    @ViewBuilder
+    private func stalledRow(_ session: StalledSession) -> some View {
+        let accent: Color = session.kind == .transient ? .yellow : .orange
+        let pinned = state.isPinned(session)
+        HStack(spacing: Design.m) {
+            Image(systemName: session.kind.icon)
+                .font(.title3)
+                .foregroundStyle(accent.gradient)
+            VStack(alignment: .leading, spacing: Design.xs) {
+                Text(session.title).font(.body).lineLimit(1)
+                HStack(spacing: Design.s) {
+                    Text(session.workspaceName)
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(session.source.label)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(.secondary.opacity(0.15), in: Capsule())
+                    Text(session.kind.shortLabel)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(accent.opacity(0.15), in: Capsule())
+                }
+            }
+            Spacer()
+            // Pin = auto-resume this session around the clock (not just at night).
+            Button { state.togglePin(session) } label: {
+                Image(systemName: pinned ? "repeat.circle.fill" : "repeat.circle")
+                    .font(.title3)
+                    .foregroundStyle(pinned ? Color.indigo : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help(pinned
+                  ? "Auto-resuming any time — click to stop"
+                  : "Auto-resume this session any time (not just at night)")
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .hoverLift()
     }
 
     private var activityLog: some View {
@@ -321,14 +333,15 @@ struct ToolbarIconButton: View {
 
 extension MenuView {
     var about: some View {
-        HStack(spacing: 4) {
-            Spacer()
-            Text("Made with ❤️ in Brazil by")
-            Link("Jonathan Korn", destination: AboutLinks.linkedIn).underline()
-            Text("·").foregroundStyle(.tertiary)
-            Link("Buy me a coffee", destination: AboutLinks.buyMeACoffee).underline()
-            Spacer()
+        VStack(spacing: 2) {
+            Text("Made with ❤️ in Brazil")
+            HStack(spacing: 5) {
+                Link("Jonathan Korn", destination: AboutLinks.linkedIn).underline()
+                Text("·")
+                Link("Buy me a coffee", destination: AboutLinks.buyMeACoffee).underline()
+            }
         }
+        .frame(maxWidth: .infinity)
         .font(.caption2)
         .foregroundStyle(.tertiary)
         .tint(.secondary)

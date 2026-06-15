@@ -156,28 +156,31 @@ final class AppState: ObservableObject {
 
     /// The budget-gated resume pass, run on the slower resume loop.
     func resumeTick() async {
-        // Force a fresh read so the budget decision reflects current usage.
         guard await refreshView(forceUsage: true) else { return }
+        guard armed, let usage else { return }
         let config = PolicyConfig.fromDefaults()
-        guard armed, decision?.resume == true, !stalled.isEmpty else { return }
-        await resumeStalledSessions(config: config, manual: false)
+        let now = Date()
+        // Never overspend. But resume PINNED sessions around the clock, and
+        // every stalled session during the night window.
+        guard Policy.budgetAllows(usage: usage, config: config, now: now).resume else { return }
+        let nightOK = Policy.shouldResume(usage: usage, config: config, now: now).resume
+        let pins = pinnedIDs
+        let eligible = stalled.filter { nightOK || pins.contains($0.claudeSessionID) }
+        guard !eligible.isEmpty else { return }
+        await resumeStalledSessions(sessions: eligible, config: config, manual: false)
     }
 
-    /// Manual "Resume now": refresh, then resume ignoring the active-hours
-    /// gate (the user is present) but never the budget gates.
+    /// Manual "Resume now": your explicit call — resume regardless of our
+    /// active-hours and budget gates (only Anthropic's real limit can stop a
+    /// resume, and that's reported per-session). Crucially it does NOT depend
+    /// on a usage fetch, which can itself be rate-limited.
     func tick(manual: Bool) async {
         isWorking = true
         defer { isWorking = false }
-        // Fail closed: a manual resume needs a fresh, confirmed reading.
-        guard await refreshView(forceUsage: true) else { return }
+        await refreshView() // best-effort display refresh; never gates the resume
+        guard !stalled.isEmpty else { log("Nothing stalled to resume right now"); return }
         let config = PolicyConfig.fromDefaults()
-        if let snapshot = usage {
-            decision = Policy.shouldResume(
-                usage: snapshot, config: config, now: Date(), ignoreActiveHours: manual
-            )
-        }
-        guard armed || manual, decision?.resume == true, !stalled.isEmpty else { return }
-        await resumeStalledSessions(config: config, manual: manual)
+        await resumeStalledSessions(sessions: stalled, config: config, manual: manual)
     }
 
     var uiResumeEnabled: Bool {
@@ -185,7 +188,33 @@ final class AppState: ObservableObject {
             || UserDefaults.standard.bool(forKey: "uiResume")
     }
 
-    private func resumeStalledSessions(config: PolicyConfig, manual: Bool) async {
+    // MARK: - Per-session auto-resume pins
+
+    // Pinned sessions auto-resume around the clock (budget permitting), not
+    // just during the night window — so the day's stalls aren't stuck waiting.
+    private let pinnedKey = "pinnedSessions"
+
+    var pinnedIDs: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: pinnedKey) ?? [])
+    }
+
+    func isPinned(_ session: StalledSession) -> Bool {
+        pinnedIDs.contains(session.claudeSessionID)
+    }
+
+    func togglePin(_ session: StalledSession) {
+        objectWillChange.send()
+        var ids = pinnedIDs
+        let nowPinned = !ids.contains(session.claudeSessionID)
+        if nowPinned { ids.insert(session.claudeSessionID) }
+        else { ids.remove(session.claudeSessionID) }
+        UserDefaults.standard.set(Array(ids), forKey: pinnedKey)
+        log(nowPinned ? "📌 Auto-resume on: \(session.title)" : "Auto-resume off: \(session.title)")
+    }
+
+    private func resumeStalledSessions(
+        sessions: [StalledSession], config: PolicyConfig, manual: Bool
+    ) async {
         guard !isResuming else { return } // never run two passes at once
         isResuming = true
         defer { isResuming = false }
@@ -206,14 +235,18 @@ final class AppState: ObservableObject {
         }
         var night = NightLedger.load(startHour: config.startHour)
 
-        for session in stalled {
-            guard night.count(for: session.sessionID) < config.maxResumesPerSession else {
-                log("Skipping \(session.title): nightly retry cap reached")
-                continue
-            }
-            guard night.total < config.maxSessionsPerNight else {
-                log("Nightly cap reached (\(config.maxSessionsPerNight) resumes)")
-                break
+        for session in sessions {
+            // Per-night caps protect the unattended loop; a manual click is
+            // your explicit call, so it bypasses them.
+            if !manual {
+                guard night.count(for: session.sessionID) < config.maxResumesPerSession else {
+                    log("Skipping \(session.title): nightly retry cap reached")
+                    continue
+                }
+                guard night.total < config.maxSessionsPerNight else {
+                    log("Nightly cap reached (\(config.maxSessionsPerNight) resumes)")
+                    break
+                }
             }
 
             currentlyResuming = session.title
@@ -283,20 +316,21 @@ final class AppState: ObservableObject {
                 break
             }
 
-            // A long agentic run can eat a big chunk of the 5h window on its
-            // own — re-check the budget before touching the next session.
-            guard let fresh = try? await UsageClient.fetchUsage() else {
-                log("⚠️ Usage re-check failed — stopping")
-                break
-            }
-            usage = fresh
-            let next = Policy.shouldResume(
-                usage: fresh, config: config, now: Date(), ignoreActiveHours: manual
-            )
-            decision = next
-            if !next.resume {
-                log("Pausing: \(next.reason)")
-                break
+            // Auto only: a long agentic run can eat a big chunk of the 5h
+            // window, so re-check the budget before the next session. A
+            // manual pass is your explicit call and isn't budget-gated.
+            if !manual {
+                guard let fresh = try? await UsageClient.fetchUsage() else {
+                    log("⚠️ Usage re-check failed — stopping")
+                    break
+                }
+                usage = fresh
+                let next = Policy.budgetAllows(usage: fresh, config: config, now: Date())
+                decision = next
+                if !next.resume {
+                    log("Pausing: \(next.reason)")
+                    break
+                }
             }
         }
         stalled = await combinedStalled()

@@ -56,6 +56,14 @@ enum Policy {
             }
         }
 
+        return budgetAllows(usage: usage, config: config, now: now)
+    }
+
+    /// Budget-only gate: the 5h / weekly ceilings and the weekly pacing
+    /// heuristic — NO active-hours or morning-protection. Used for per-session
+    /// around-the-clock auto-resume (which should respect spend but not the
+    /// night window).
+    static func budgetAllows(usage: UsageSnapshot, config: PolicyConfig, now: Date) -> Decision {
         if usage.fiveHour.utilization >= config.fiveHourCeiling {
             return Decision(
                 resume: false,
