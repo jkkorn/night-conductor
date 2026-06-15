@@ -40,6 +40,22 @@ enum StallKind: Equatable {
     }
 }
 
+/// Which app the stalled session belongs to. Resume routing differs:
+/// Conductor resumes via its Retry (with a headless fallback); Claude
+/// Desktop resumes only via its own Retry (its agents run sandboxed, so a
+/// host-side headless resume would change the security model).
+enum SessionSource: String, Equatable {
+    case conductor
+    case claudeDesktop
+
+    var label: String {
+        switch self {
+        case .conductor: return "Conductor"
+        case .claudeDesktop: return "Claude"
+        }
+    }
+}
+
 struct StalledSession: Identifiable, Equatable {
     let sessionID: String
     let claudeSessionID: String
@@ -47,6 +63,7 @@ struct StalledSession: Identifiable, Equatable {
     let workspacePath: String
     let errorText: String
     let stalledAt: Date?
+    var source: SessionSource = .conductor
     var kind: StallKind { StallKind.classify(errorText) }
 
     var id: String { sessionID }

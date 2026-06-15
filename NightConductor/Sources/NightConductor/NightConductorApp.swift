@@ -39,6 +39,15 @@ enum Main {
             }
             return
         }
+        if args.contains("--scan") {
+            let conductor = (try? ConductorDB.findStalledSessions()) ?? []
+            let claude = ClaudeDesktopDB.findStalledSessions()
+            print("Conductor stalled: \(conductor.count)")
+            for s in conductor { print("  - \(s.title) [\(s.kind.shortLabel)] @ \(s.workspaceName)") }
+            print("Claude Desktop stalled: \(claude.count)")
+            for s in claude { print("  - \(s.title) [\(s.kind.shortLabel)] @ \(s.workspaceName)") }
+            return
+        }
         NightConductorApp.main()
     }
 }

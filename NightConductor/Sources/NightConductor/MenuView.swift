@@ -194,6 +194,12 @@ struct MenuView: View {
                                     HStack(spacing: Design.s) {
                                         Text(session.workspaceName)
                                             .font(.caption).foregroundStyle(.secondary)
+                                        Text(session.source.label)
+                                            .font(.caption2.weight(.medium))
+                                            .foregroundStyle(.secondary)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 1)
+                                            .background(.secondary.opacity(0.15), in: Capsule())
                                         Text(session.kind.shortLabel)
                                             .font(.caption2.weight(.medium))
                                             .foregroundStyle(accent)

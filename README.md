@@ -90,6 +90,14 @@ python3 -m autoconduct status     # usage, stalled sessions, decision
 python3 -m autoconduct install    # launchd agent, ticks every 10 min
 ```
 
+## Works with Claude Desktop too
+
+Night Conductor also watches the **Claude desktop app's "Cowork" sessions**.
+Stalled ones show up in the same list (badged `Claude`) and are resumed the
+faithful way — by pressing Claude Desktop's own Retry, so the run stays
+inside its sandbox (no headless fallback there, on purpose). Conductor
+sessions still get the headless fallback.
+
 ## Morning summary & weekly stats
 
 When the watch window ends, Night Conductor posts a one-line morning

@@ -85,6 +85,15 @@ final class AppState: ObservableObject {
     /// when the network is down (usage failure holds, but doesn't wipe it).
     /// Returns whether *fresh* usage was obtained — callers must not resume
     /// on a stale snapshot (fail closed).
+    /// Stalled sessions from every supported source (Conductor + Claude
+    /// Desktop). Conductor's DB read can throw; Claude Desktop returns [].
+    private func scanStalled() -> [StalledSession] {
+        var all: [StalledSession] = []
+        if let conductor = try? ConductorDB.findStalledSessions() { all += conductor }
+        all += ClaudeDesktopDB.findStalledSessions()
+        return all
+    }
+
     /// Refresh the display. `forceUsage` bypasses the cache (used right
     /// before a resume so budget gates see current data). Returns whether we
     /// have a fresh-enough usage reading to act on. Never resumes.
@@ -99,9 +108,7 @@ final class AppState: ObservableObject {
         PowerManager.preventIdleSleep(armed && inWindow)
         checkMorningSummary(inWindow: inWindow, config: config)
 
-        if let fresh = try? ConductorDB.findStalledSessions() {
-            stalled = fresh
-        }
+        stalled = scanStalled()
         defer { lastTick = Date() }
 
         // Re-fetch usage only when forced or the cache is older than the
@@ -185,10 +192,6 @@ final class AppState: ObservableObject {
             resolvedClaudePath = .some(found)
             return found
         }
-        if !useUI, await claudeBinary() == nil {
-            log("⚠️ claude CLI not found — install Claude Code first")
-            return
-        }
         var night = NightLedger.load(startHour: config.startHour)
 
         for session in stalled {
@@ -202,26 +205,42 @@ final class AppState: ObservableObject {
             }
 
             currentlyResuming = session.title
-            log("▶ Resuming \(session.title)")
+            log("▶ Resuming \(session.title) [\(session.source.label)]")
             var result = ResumeResult(ok: false, detail: "not attempted")
-            var resumedInsideConductor = false
-            if useUI {
-                result = await Task.detached(priority: .utility) {
-                    UIResumer.resume(session: session)
-                }.value
-                resumedInsideConductor = result.ok
-                if !result.ok {
-                    log("↻ UI resume failed (\(result.detail)) — falling back to headless")
+            var handedToApp = false // resumed inside the host app — chat in sync
+
+            switch session.source {
+            case .claudeDesktop:
+                // Faithful, in-sandbox resume only — no headless fallback,
+                // since a host resume would drop Claude Desktop's sandbox.
+                if ClaudeDesktopResumer.hasAccessibilityPermission {
+                    result = await Task.detached(priority: .utility) {
+                        ClaudeDesktopResumer.resume(session: session)
+                    }.value
+                    handedToApp = result.ok
+                } else {
+                    result = ResumeResult(ok: false, detail: "needs Accessibility access")
+                }
+            case .conductor:
+                if useUI {
+                    result = await Task.detached(priority: .utility) {
+                        UIResumer.resume(session: session)
+                    }.value
+                    handedToApp = result.ok
+                    if !result.ok {
+                        log("↻ UI resume failed (\(result.detail)) — falling back to headless")
+                    }
+                }
+                if !result.ok, let claudePath = await claudeBinary() {
+                    result = await Task.detached(priority: .utility) {
+                        Resumer.resume(session: session, claudePath: claudePath, config: config)
+                    }.value
                 }
             }
-            if !result.ok, let claudePath = await claudeBinary() {
-                result = await Task.detached(priority: .utility) {
-                    Resumer.resume(session: session, claudePath: claudePath, config: config)
-                }.value
-            }
+
             currentlyResuming = nil
-            if resumedInsideConductor {
-                log("✓ \(session.title) resumed inside Conductor — chat stays in sync")
+            if handedToApp {
+                log("✓ \(session.title) resumed inside \(session.source.label) — chat stays in sync")
             } else {
                 log(result.ok ? "✓ \(session.title) finished a run" : "✗ \(session.title): \(result.detail)")
             }
@@ -232,15 +251,14 @@ final class AppState: ObservableObject {
                 ResumeHistory.record(ResumeEvent(
                     date: Date(), title: session.title,
                     kind: session.kind == .transient ? "transient" : "usage_limit",
-                    inConductor: resumedInsideConductor
+                    inConductor: handedToApp
                 ))
             }
 
-            // A UI resume hands the run to Conductor and returns immediately,
-            // so its cost isn't measurable yet. One per tick keeps the
-            // budget checks honest; the next tick handles the next session.
-            if resumedInsideConductor {
-                log("Handed to Conductor — next session at the next resume cycle")
+            // An in-app resume hands off and returns immediately, so its cost
+            // isn't measurable yet. One per tick keeps the budget honest.
+            if handedToApp {
+                log("Handed to \(session.source.label) — next session at the next resume cycle")
                 break
             }
 
@@ -260,7 +278,7 @@ final class AppState: ObservableObject {
                 break
             }
         }
-        stalled = (try? ConductorDB.findStalledSessions()) ?? []
+        stalled = scanStalled()
     }
 
     /// When the watch window ends (the user's wake hour), post one morning
