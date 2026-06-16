@@ -32,9 +32,13 @@ enum Policy {
         let hour = calendar.component(.hour, from: now)
         if !ignoreActiveHours,
            !inActiveHours(hour: hour, start: config.startHour, end: config.endHour) {
+            // Not a problem state — you're awake and at the helm; the night
+            // watch simply hasn't started yet. Phrase it around when it takes
+            // over, not "outside <something> hours".
             return Decision(
                 resume: false,
-                reason: "Outside active hours (\(config.startHour):00–\(config.endHour):00)"
+                reason: "You're at the helm — night watch starts at \(config.startHour):00",
+                state: .standingBy
             )
         }
 
@@ -97,7 +101,8 @@ enum Policy {
         return Decision(
             resume: true,
             reason: "Wiggle room: \(Int(weekUsed))% of week used, "
-                + String(format: "%.1f", daysLeft) + " days to reset"
+                + String(format: "%.1f", daysLeft) + " days to reset",
+            state: .resuming
         )
     }
 }

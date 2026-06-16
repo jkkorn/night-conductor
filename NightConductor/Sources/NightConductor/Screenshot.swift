@@ -106,8 +106,8 @@ enum Screenshotter {
             fetchedAt: now
         )
         state.decision = name == "high"
-            ? Decision(resume: false, reason: "5-hour window at 88% (ceiling 85%)")
-            : Decision(resume: true, reason: "Wiggle room: 29% of week used, 1.6 days to reset")
+            ? Decision(resume: false, reason: "5-hour window at 88% (ceiling 85%)", state: .holding)
+            : Decision(resume: true, reason: "Wiggle room: 29% of week used, 1.6 days to reset", state: .resuming)
         let base = [
             StalledSession(
                 sessionID: "demo-1", claudeSessionID: "demo-1",

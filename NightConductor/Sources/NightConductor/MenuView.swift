@@ -162,13 +162,21 @@ struct MenuView: View {
     }
 
     private var decisionColor: Color {
-        guard let decision = state.decision else { return .gray }
-        return decision.resume ? .green : .orange
+        switch state.decision?.state {
+        case .resuming: return .green
+        case .standingBy: return .indigo   // calm & nocturnal — not a warning
+        case .holding: return .orange
+        case .checking, .none: return .secondary
+        }
     }
 
     private var decisionIcon: String {
-        guard let decision = state.decision else { return "clock" }
-        return decision.resume ? "checkmark.circle.fill" : "pause.circle.fill"
+        switch state.decision?.state {
+        case .resuming: return "checkmark.circle.fill"
+        case .standingBy: return "moon.stars.fill" // resting; wakes for the night
+        case .holding: return "pause.circle.fill"
+        case .checking, .none: return "clock"
+        }
     }
 
     @ViewBuilder
