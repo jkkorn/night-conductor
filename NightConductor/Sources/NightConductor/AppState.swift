@@ -23,6 +23,7 @@ final class AppState: ObservableObject {
     // 30s view loop reads it from cache and only re-fetches this often.
     static let usageRefreshInterval: TimeInterval = 180   // 3 min
     static let usageStaleAfter: TimeInterval = 900        // 15 min → treat as unavailable
+    static let maxAttemptsPerPass = 8                     // bound a pass when sessions fail
 
     private var viewLoop: Task<Void, Never>?
     private var resumeLoop: Task<Void, Never>?
@@ -245,7 +246,10 @@ final class AppState: ObservableObject {
     private func resumeStalledSessions(
         sessions: [StalledSession], config: PolicyConfig, manual: Bool
     ) async {
-        guard !isResuming else { return } // never run two passes at once
+        guard !isResuming else {
+            if manual { log("Busy resuming — try again in a moment") } // don't drop silently
+            return
+        } // never run two passes at once
         isResuming = true
         defer { isResuming = false }
 
@@ -264,20 +268,25 @@ final class AppState: ObservableObject {
             return found
         }
         var night = NightLedger.load(startHour: config.startHour)
+        var attemptsThisPass = 0 // bound a pass when many sessions fail in a row
 
         for session in sessions {
             // Per-night caps protect the unattended loop; a manual click is
             // your explicit call, so it bypasses them.
             if !manual {
-                guard night.count(for: session.sessionID) < config.maxResumesPerSession else {
-                    log("Skipping \(session.title): nightly retry cap reached")
-                    continue
-                }
                 guard night.total < config.maxSessionsPerNight else {
                     log("Nightly cap reached (\(config.maxSessionsPerNight) resumes)")
                     break
                 }
+                guard attemptsThisPass < Self.maxAttemptsPerPass else { break } // try again next tick
+                guard night.count(for: session.ledgerKey) < config.maxResumesPerSession else {
+                    continue // already resumed this one enough tonight
+                }
+                guard night.failureCount(for: session.ledgerKey) < config.maxResumesPerSession else {
+                    continue // keeps failing tonight — stop hammering it
+                }
             }
+            attemptsThisPass += 1
 
             currentlyResuming = session.title
             log("▶ Resuming \(session.title) [\(session.source.label)]")
@@ -329,14 +338,25 @@ final class AppState: ObservableObject {
                 log(result.ok ? "✓ \(session.title) finished a run" : "✗ \(session.title): \(result.detail)")
             }
 
-            night = night.recording(session.sessionID)
-            night.save()
+            // A manual click bypasses the cap CHECK, so it must not spend the
+            // cap BUDGET either — the nightly ledger exists to bound the
+            // UNATTENDED loop, not your explicit choices. Manual still logs to
+            // history (for the activity log / stat card).
             if result.ok {
                 ResumeHistory.record(ResumeEvent(
                     date: Date(), title: session.title,
                     kind: session.kind == .transient ? "transient" : "usage_limit",
                     inConductor: handedToApp
                 ))
+            }
+            if !manual {
+                // Only a SUCCESS spends the night's budget. A failure is tracked
+                // separately so a transient blip can't burn the per-night /
+                // per-session caps and disable the whole night's watch.
+                night = result.ok
+                    ? night.recordingSuccess(session.ledgerKey)
+                    : night.recordingFailure(session.ledgerKey)
+                night.save()
             }
 
             // Spread it out: an auto pass resumes ONE session per tick, so the
@@ -378,20 +398,37 @@ final class AppState: ObservableObject {
     }
 }
 
-/// Per-night resume counts, persisted so relaunching the app can't bypass
-/// the caps. A "night" is keyed by the date its active window started.
+/// Per-night ledger, persisted so relaunching can't bypass the caps. A
+/// "night" is keyed by the date its active window started. Successes and
+/// failures are tracked separately: successes gate the spend caps, while
+/// failures only stop us from retrying a genuinely broken session forever —
+/// a transient blip must NOT consume the night's budget.
 struct NightLedger {
     let key: String
-    let counts: [String: Int]
+    let counts: [String: Int]    // successful resumes per session
+    let failures: [String: Int]  // failed attempts per session
 
-    var total: Int { counts.values.reduce(0, +) }
+    init(key: String, counts: [String: Int] = [:], failures: [String: Int] = [:]) {
+        self.key = key
+        self.counts = counts
+        self.failures = failures
+    }
+
+    var total: Int { counts.values.reduce(0, +) } // successful resumes tonight
 
     func count(for sessionID: String) -> Int { counts[sessionID] ?? 0 }
+    func failureCount(for sessionID: String) -> Int { failures[sessionID] ?? 0 }
 
-    func recording(_ sessionID: String) -> NightLedger {
+    func recordingSuccess(_ sessionID: String) -> NightLedger {
         var updated = counts
         updated[sessionID, default: 0] += 1
-        return NightLedger(key: key, counts: updated)
+        return NightLedger(key: key, counts: updated, failures: failures)
+    }
+
+    func recordingFailure(_ sessionID: String) -> NightLedger {
+        var updated = failures
+        updated[sessionID, default: 0] += 1
+        return NightLedger(key: key, counts: counts, failures: updated)
     }
 
     static func currentKey(now: Date = Date(), startHour: Int, calendar: Calendar = .current) -> String {
@@ -406,16 +443,19 @@ struct NightLedger {
 
     static func load(startHour: Int, defaults: UserDefaults = .standard) -> NightLedger {
         let key = currentKey(startHour: startHour)
-        guard defaults.string(forKey: "nightKey") == key,
-              let counts = defaults.dictionary(forKey: "nightCounts") as? [String: Int]
-        else {
-            return NightLedger(key: key, counts: [:]) // new night, fresh budget
+        guard defaults.string(forKey: "nightKey") == key else {
+            return NightLedger(key: key) // new night, fresh budget
         }
-        return NightLedger(key: key, counts: counts)
+        return NightLedger(
+            key: key,
+            counts: defaults.dictionary(forKey: "nightCounts") as? [String: Int] ?? [:],
+            failures: defaults.dictionary(forKey: "nightFailures") as? [String: Int] ?? [:]
+        )
     }
 
     func save(defaults: UserDefaults = .standard) {
         defaults.set(key, forKey: "nightKey")
         defaults.set(counts, forKey: "nightCounts")
+        defaults.set(failures, forKey: "nightFailures")
     }
 }

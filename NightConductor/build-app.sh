@@ -46,8 +46,11 @@ iconutil -c icns -o "$APP_DIR/Contents/Resources/AppIcon.icns" "$ICONSET"
 # Sign with Developer ID + hardened runtime when a cert is available (so
 # release builds notarize); otherwise ad-hoc, so anyone can still build.
 # Override the identity with SIGN_IDENTITY=...; set SIGN_IDENTITY=- to force ad-hoc.
+# NB: `|| true` is load-bearing — under `set -euo pipefail`, a no-match grep
+# (no Developer ID cert, e.g. on CI) would otherwise abort the script before
+# the ad-hoc fallback below ever runs.
 IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null \
-    | grep "Developer ID Application" | head -1 | awk '{print $2}')}"
+    | grep "Developer ID Application" | head -1 | awk '{print $2}' || true)}"
 if [ -n "$IDENTITY" ] && [ "$IDENTITY" != "-" ]; then
     echo "▸ Signing (Developer ID: $IDENTITY, hardened runtime)…"
     codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_DIR"

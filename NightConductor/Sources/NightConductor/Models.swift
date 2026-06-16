@@ -70,6 +70,15 @@ struct StalledSession: Identifiable, Equatable {
 
     var id: String { sessionID }
 
+    /// Stable identity for budget accounting. The SAME underlying Claude
+    /// session can surface under different `sessionID`s across sources (a
+    /// Conductor session vs. its `cc-`-prefixed terminal transcript), which
+    /// would otherwise let it consume two slots of the nightly cap. Keying
+    /// the ledger by the Claude session id collapses those duplicates.
+    var ledgerKey: String {
+        claudeSessionID.isEmpty ? sessionID : claudeSessionID
+    }
+
     var workspaceName: String {
         (workspacePath as NSString).lastPathComponent
     }

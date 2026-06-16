@@ -26,7 +26,7 @@ enum ClaudeCodeDB {
             options: [.skipsHiddenFiles]
         ) else { return [] }
 
-        // Collect recent transcripts (cheap mtime check), newest first, capped.
+        // Collect recent transcripts (cheap mtime check), newest first.
         var recent: [(url: URL, mtime: Date)] = []
         for case let url as URL in walker where url.pathExtension == "jsonl" {
             let mtime = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
@@ -35,12 +35,21 @@ enum ClaudeCodeDB {
         }
         recent.sort { $0.mtime > $1.mtime }
 
-        // Walk newest-first; keep at most one stalled session per workspace
-        // (the latest), so a workspace's pile of old transcripts doesn't each
-        // count as a separate stall.
+        // Collapse to the newest transcript per project dir BEFORE capping.
+        // A project dir maps 1:1 to a cwd, so only its latest transcript can
+        // be the live stall — older ones are history. Capping raw files (a
+        // chatty workspace can have hundreds) could otherwise push another
+        // workspace's only stalled transcript past the limit and hide it.
+        var seenDirs = Set<String>()
+        let candidates = recent
+            .filter { seenDirs.insert($0.url.deletingLastPathComponent().path).inserted }
+            .prefix(maxFilesScanned)
+
+        // Parse, keeping at most one stalled session per workspace (the cwd
+        // inside the file can differ from the encoded dir, so dedupe again).
         var out: [StalledSession] = []
         var seenWorkspaces = Set<String>()
-        for entry in recent.prefix(maxFilesScanned) {
+        for entry in candidates {
             guard let session = parse(url: entry.url, now: now) else { continue }
             guard seenWorkspaces.insert(session.workspacePath).inserted else { continue }
             out.append(session)

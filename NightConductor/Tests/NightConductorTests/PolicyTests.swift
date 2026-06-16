@@ -142,7 +142,7 @@ final class NightLedgerTests: XCTestCase {
 
     func testRecordingIsImmutableAndCounts() {
         let base = NightLedger(key: "2026-06-10", counts: [:])
-        let after = base.recording("s1").recording("s1").recording("s2")
+        let after = base.recordingSuccess("s1").recordingSuccess("s1").recordingSuccess("s2")
         XCTAssertEqual(base.total, 0) // original unchanged
         XCTAssertEqual(after.count(for: "s1"), 2)
         XCTAssertEqual(after.total, 3)
