@@ -3,198 +3,345 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Night Conductor — resume your Conductor sessions while you sleep</title>
-<meta name="description" content="A tiny macOS menu bar app that resumes Conductor sessions which hit the Claude usage limit overnight — without blowing your weekly budget.">
+<title>Night Conductor</title>
+<meta name="description" content="A small macOS menu bar app that finishes your stalled Claude sessions while you sleep, without blowing your weekly budget. Works with Conductor, the Claude desktop app, and the terminal.">
 <meta property="og:title" content="Night Conductor">
-<meta property="og:description" content="Your Conductor sessions hit the Claude limit at 11pm. Night Conductor resumes them while you sleep — without blowing your weekly budget.">
+<meta property="og:description" content="Your coding sessions hit Claude's limit at midnight. Night Conductor finishes them while you sleep.">
 <meta property="og:image" content="popover.png">
-<meta name="theme-color" content="#07070d">
+<meta name="theme-color" content="#05050b">
 <link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#06060c; --card:rgba(255,255,255,.04); --line:rgba(255,255,255,.09);
-    --ink:#ECECF2; --dim:#9a9ab0; --accent:#8a8af6; --accent2:#b78cff;
-    --green:#34c759; --amber:#ff9f0a;
+    --bg:#05050b; --ink:#f3f3f8; --dim:#9595ab; --faint:#62627a;
+    --line:rgba(255,255,255,.08); --card:rgba(255,255,255,.035);
+    --accent:#a7adff; --moon:#f1f0ff;
+    --serif:"Instrument Serif", ui-serif, Georgia, serif;
+    --sans:-apple-system, BlinkMacSystemFont, system-ui, "SF Pro Text", sans-serif;
+    --ease:cubic-bezier(.22,.61,.36,1);
   }
-  *{box-sizing:border-box}
+  *{box-sizing:border-box; margin:0; padding:0}
   html{scroll-behavior:smooth}
   body{
-    margin:0; color:var(--ink); background:var(--bg);
-    font:16px/1.65 -apple-system, BlinkMacSystemFont, system-ui, "SF Pro Text", sans-serif;
-    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased;
+    overflow-x:hidden; letter-spacing:.002em;
   }
-  /* layered night sky */
-  .sky{position:fixed; inset:0; z-index:-2; pointer-events:none;
+  ::selection{background:rgba(167,173,255,.28); color:#fff}
+  a{color:inherit; text-decoration:none}
+
+  /* depth: a sky that recedes, two soft light sources, no busy starfield */
+  .sky{position:fixed; inset:0; z-index:-3; pointer-events:none;
     background:
-      radial-gradient(1100px 620px at 72% -12%, #2a2170 0%, transparent 58%),
-      radial-gradient(900px 520px at 12% 4%, #142a5e 0%, transparent 55%),
-      linear-gradient(180deg, #0a0a16 0%, #06060c 60%);}
-  .stars{position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.6;
-    background-image:
-      radial-gradient(1.4px 1.4px at 20% 30%, #fff, transparent),
-      radial-gradient(1.2px 1.2px at 70% 20%, #fff, transparent),
-      radial-gradient(1px 1px at 40% 70%, #cdd, transparent),
-      radial-gradient(1.6px 1.6px at 85% 60%, #fff, transparent),
-      radial-gradient(1px 1px at 55% 45%, #fff, transparent),
-      radial-gradient(1.2px 1.2px at 30% 85%, #fff, transparent),
-      radial-gradient(1px 1px at 90% 30%, #bcd, transparent);
-    background-repeat:no-repeat; animation:twinkle 6s ease-in-out infinite alternate;}
-  @keyframes twinkle{from{opacity:.35}to{opacity:.7}}
-  @media (prefers-reduced-motion:reduce){.stars{animation:none}}
+      radial-gradient(120% 80% at 50% -20%, #181440 0%, #0a0a18 45%, var(--bg) 75%);}
+  .glow{position:fixed; z-index:-2; pointer-events:none; border-radius:50%;
+    filter:blur(70px); opacity:.5; will-change:transform}
+  .glow.a{width:540px; height:540px; top:-160px; left:8%;
+    background:radial-gradient(circle, rgba(96,90,220,.55), transparent 65%)}
+  .glow.b{width:460px; height:460px; top:6%; right:2%;
+    background:radial-gradient(circle, rgba(40,90,180,.42), transparent 65%)}
 
-  .wrap{max-width:1000px; margin:0 auto; padding:0 24px}
-  a{color:var(--accent); text-decoration:none}
-  a:hover{text-decoration:underline}
+  .wrap{max-width:1060px; margin:0 auto; padding:0 28px}
 
-  header{text-align:center; padding:90px 0 24px}
-  .badge-moon{font-size:42px; filter:drop-shadow(0 0 18px rgba(160,160,255,.55))}
-  h1{font-family:ui-serif, Georgia, "Times New Roman", serif; font-weight:600;
-     font-size:clamp(44px, 8vw, 76px); margin:14px 0 14px; letter-spacing:-.02em;
-     background:linear-gradient(180deg,#fff, #c9c9e8); -webkit-background-clip:text; background-clip:text; color:transparent}
-  .tag{font-size:clamp(18px,2.6vw,23px); color:var(--ink); opacity:.92; max-width:660px; margin:0 auto}
-  .tag b{color:#fff}
-  .cta{display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:30px 0 8px}
-  .btn{display:inline-flex; align-items:center; gap:8px; padding:13px 24px; border-radius:13px;
-       font-weight:600; transition:transform .15s ease, box-shadow .2s ease}
-  .btn:hover{text-decoration:none; transform:translateY(-2px)}
-  .btn.primary{background:linear-gradient(180deg,#9a9af8,#6a6ae6); color:#fff;
-       box-shadow:0 12px 40px rgba(124,124,240,.45)}
+  /* nav */
+  nav{position:fixed; top:0; left:0; right:0; z-index:10;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 28px; transition:background .3s var(--ease), border-color .3s var(--ease), backdrop-filter .3s;
+    border-bottom:1px solid transparent}
+  nav.scrolled{background:rgba(8,8,16,.72); backdrop-filter:saturate(160%) blur(16px); border-bottom-color:var(--line)}
+  nav .brand{display:flex; align-items:center; gap:10px; font-family:var(--serif); font-size:22px; letter-spacing:.01em}
+  nav .brand .dot{width:13px; height:13px; border-radius:50%;
+    background:radial-gradient(circle at 32% 30%, #fff, #c7c6e8 55%, #8f8fc0);
+    box-shadow:0 0 14px rgba(190,190,255,.7)}
+  nav .links{display:flex; align-items:center; gap:26px; font-size:14.5px; color:var(--dim)}
+  nav .links a{transition:color .2s}
+  nav .links a:hover{color:var(--ink)}
+  nav .links .dl{color:var(--ink); border:1px solid var(--line); padding:8px 15px; border-radius:10px; background:var(--card); transition:border-color .2s, transform .15s var(--ease)}
+  nav .links .dl:hover{border-color:rgba(167,173,255,.5); transform:translateY(-1px)}
+  @media(max-width:620px){nav .links a:not(.dl){display:none}}
+
+  /* hero */
+  .hero{position:relative; text-align:center; padding:188px 0 70px}
+  .moon{position:relative; width:128px; height:128px; margin:0 auto 30px; border-radius:50%; will-change:transform;
+    background:
+      radial-gradient(38px 34px at 38% 32%, #ffffff 0%, #eceaff 38%, #d6d4f2 60%, #b9b7df 78%, #9a98c8 100%);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,.06) inset,
+      -14px -10px 30px rgba(120,116,180,.35) inset,
+      0 0 70px 14px rgba(173,170,255,.45),
+      0 0 160px 40px rgba(120,110,230,.28);}
+  .moon::before,.moon::after{content:""; position:absolute; border-radius:50%;
+    background:radial-gradient(circle at 40% 35%, rgba(120,118,160,.30), rgba(120,118,160,0) 70%)}
+  .moon::before{width:26px; height:26px; top:58%; left:30%}
+  .moon::after{width:16px; height:16px; top:30%; left:62%}
+  h1{font-family:var(--serif); font-weight:400; font-size:clamp(54px,9vw,96px);
+    line-height:.98; letter-spacing:.005em; margin-bottom:18px}
+  .tag{font-size:clamp(19px,2.4vw,23px); color:var(--dim); max-width:600px; margin:0 auto; line-height:1.5}
+  .tag b{color:var(--ink); font-weight:500}
+  .cta{display:flex; gap:13px; justify-content:center; flex-wrap:wrap; margin-top:34px}
+  .btn{display:inline-flex; align-items:center; gap:9px; padding:13px 24px; border-radius:13px; font-size:15.5px; font-weight:600;
+    transition:transform .18s var(--ease), box-shadow .25s var(--ease), border-color .2s}
+  .btn:hover{transform:translateY(-2px)}
+  .btn.primary{color:#0a0a16; background:linear-gradient(180deg,#fbfbff,#d9d7fb); box-shadow:0 10px 34px rgba(180,176,255,.32)}
+  .btn.primary:hover{box-shadow:0 16px 44px rgba(180,176,255,.45)}
   .btn.ghost{color:var(--ink); border:1px solid var(--line); background:var(--card)}
-  .hero-img{display:block; margin:46px auto 10px; width:344px; max-width:88%;
-            border-radius:22px; box-shadow:0 40px 100px rgba(0,0,0,.6)}
-  .cap{text-align:center; color:var(--dim); font-size:14px}
+  .btn.ghost:hover{border-color:rgba(167,173,255,.5)}
+  .shot-hero{margin:64px auto 0; width:360px; max-width:90%; border-radius:24px;
+    box-shadow:0 50px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.05);
+    will-change:transform}
 
-  section{padding:56px 0; border-top:1px solid var(--line)}
-  .eyebrow{text-transform:uppercase; letter-spacing:.14em; font-size:12.5px; color:var(--accent2); font-weight:700; margin:0 0 10px}
-  h2{font-family:ui-serif, Georgia, serif; font-weight:600; font-size:clamp(26px,4vw,36px); margin:0 0 10px; letter-spacing:-.01em}
-  .lede{color:var(--dim); max-width:620px; margin:0 0 28px}
+  /* sections */
+  section{padding:74px 0; position:relative}
+  .eyebrow{font-size:12.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:16px}
+  h2{font-family:var(--serif); font-weight:400; font-size:clamp(32px,5vw,46px); line-height:1.04; letter-spacing:.01em; margin-bottom:18px}
+  .body{color:var(--dim); max-width:560px; font-size:17.5px}
+  .body a{color:var(--ink); border-bottom:1px solid rgba(167,173,255,.45); transition:border-color .2s}
+  .body a:hover{border-bottom-color:var(--accent)}
 
-  .problem{font-size:clamp(20px,3vw,27px); line-height:1.5; max-width:720px; margin:0 auto; text-align:center; color:var(--ink)}
-  .problem .err{color:var(--amber); font-weight:600}
+  /* the moment */
+  .moment{text-align:center; padding:64px 0}
+  .moment .time{font-family:var(--serif); font-size:22px; color:var(--faint); margin-bottom:14px}
+  .moment p{font-size:clamp(24px,3.4vw,34px); font-family:var(--serif); line-height:1.32; max-width:680px; margin:0 auto; color:var(--ink)}
+  .errbar{display:inline-block; margin:26px 0; padding:13px 20px; border-radius:12px;
+    background:rgba(255,120,80,.08); border:1px solid rgba(255,140,90,.28);
+    font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:14.5px; color:#ffb38a; letter-spacing:0}
+  .moment .after{color:var(--dim); font-size:19px; font-family:var(--sans)}
 
-  .steps{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:16px}
-  .step{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; backdrop-filter:blur(8px)}
-  .step .n{display:inline-flex; width:30px; height:30px; align-items:center; justify-content:center;
-           border-radius:9px; background:linear-gradient(180deg,#9a9af8,#6a6ae6); color:#fff; font-weight:700; font-size:14px; margin-bottom:12px}
-  .step h3{margin:0 0 6px; font-size:16.5px}
-  .step p{margin:0; color:var(--dim); font-size:14.5px}
+  /* why: editorial two-column */
+  .why{display:grid; grid-template-columns:.8fr 1.2fr; gap:48px; align-items:start}
+  @media(max-width:760px){.why{grid-template-columns:1fr; gap:20px}}
+  .why p{color:var(--dim); font-size:18px; margin-bottom:16px}
+  .why p:last-child{margin-bottom:0}
+  .why .lead{color:var(--ink); font-family:var(--serif); font-size:24px; line-height:1.4}
+  .thanks{display:inline-flex; align-items:center; gap:8px; margin-top:6px; font-size:15px; color:var(--dim)}
+  .thanks a{color:var(--accent); border-bottom:1px solid rgba(167,173,255,.4)}
 
-  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px}
-  .feature{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; backdrop-filter:blur(8px)}
-  .feature .ic{font-size:22px; margin-bottom:8px}
-  .feature h3{margin:0 0 6px; font-size:16.5px}
-  .feature p{margin:0; color:var(--dim); font-size:14.5px}
+  /* connect cards */
+  .three{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:34px}
+  @media(max-width:760px){.three{grid-template-columns:1fr}}
+  .conn{padding:26px 24px; border-radius:18px; background:var(--card); border:1px solid var(--line);
+    transition:transform .25s var(--ease), border-color .25s, background .25s}
+  .conn:hover{transform:translateY(-4px); border-color:rgba(167,173,255,.4); background:rgba(167,173,255,.05)}
+  .conn svg{width:30px; height:30px; stroke:var(--accent); fill:none; stroke-width:1.5; margin-bottom:16px}
+  .conn h3{font-size:18px; font-weight:600; margin-bottom:7px}
+  .conn p{color:var(--dim); font-size:15px; line-height:1.55}
+  .conn code{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:13px; color:#cfd0ff; white-space:nowrap}
 
-  .quote{border-left:3px solid var(--accent); padding:6px 0 6px 18px; margin:22px 0; color:var(--ink); font-size:17px}
-  .quote span{color:var(--dim); font-size:14px}
+  /* timeline */
+  .steps{position:relative; margin-top:36px; padding-left:34px}
+  .steps::before{content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px;
+    background:linear-gradient(180deg, var(--accent), rgba(167,173,255,.08))}
+  .stp{position:relative; padding:0 0 30px}
+  .stp:last-child{padding-bottom:0}
+  .stp::before{content:""; position:absolute; left:-34px; top:5px; width:20px; height:20px; border-radius:50%;
+    background:var(--bg); border:2px solid var(--accent); box-shadow:0 0 14px rgba(167,173,255,.5)}
+  .stp h3{font-size:18px; font-weight:600; margin-bottom:4px}
+  .stp p{color:var(--dim); font-size:15.5px; max-width:560px}
+  .stp code{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:13px; color:#cfd0ff; background:rgba(167,173,255,.1); padding:1px 6px; border-radius:5px}
 
-  pre{background:#0a0a14; border:1px solid var(--line); border-radius:14px; padding:18px; overflow:auto}
-  code{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:13.5px; color:#dfe1ff}
+  /* interface */
+  .shots{display:flex; gap:24px; justify-content:center; flex-wrap:wrap; margin-top:36px}
+  .shots img{width:300px; max-width:90%; border-radius:18px; border:1px solid var(--line); box-shadow:0 30px 70px rgba(0,0,0,.5)}
 
-  .shots{display:flex; gap:22px; justify-content:center; flex-wrap:wrap; align-items:flex-start}
-  .shots img{width:300px; max-width:90%; border-radius:16px; border:1px solid var(--line); box-shadow:0 24px 60px rgba(0,0,0,.5)}
-  .statcard{display:block; margin:8px auto 0; width:520px; max-width:96%; border-radius:16px; border:1px solid var(--line); box-shadow:0 24px 60px rgba(0,0,0,.5)}
+  /* get it */
+  .get{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:34px}
+  @media(max-width:680px){.get{grid-template-columns:1fr}}
+  .panel{padding:28px; border-radius:18px; background:var(--card); border:1px solid var(--line)}
+  .panel h3{font-family:var(--serif); font-size:24px; font-weight:400; margin-bottom:8px}
+  .panel p{color:var(--dim); font-size:15px; margin-bottom:18px}
+  .panel pre{background:#0a0a14; border:1px solid var(--line); border-radius:12px; padding:15px; overflow:auto; margin-top:14px}
+  .panel code{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:13px; color:#dfe0ff; line-height:1.7}
 
-  .harness{width:100%; border-collapse:collapse; font-size:14.5px}
-  .harness th,.harness td{text-align:left; padding:12px 14px; border-bottom:1px solid var(--line)}
-  .harness th{color:var(--dim); font-weight:600}
-  .pill{display:inline-block; padding:2px 9px; border-radius:999px; background:rgba(138,138,246,.18); color:#c9c9ff; font-size:12.5px; font-weight:600}
+  footer{border-top:1px solid var(--line); padding:46px 0 70px; text-align:center; color:var(--faint); font-size:14.5px; line-height:1.9}
+  footer a{color:var(--dim); border-bottom:1px solid var(--line)}
+  footer a:hover{color:var(--ink)}
 
-  footer{text-align:center; color:var(--dim); padding:48px 0 72px; font-size:14px; border-top:1px solid var(--line)}
-  footer a{color:var(--ink)}
+  /* reveal motion */
+  .reveal{opacity:0; transform:translateY(22px); transition:opacity .8s var(--ease), transform .8s var(--ease)}
+  .reveal.in{opacity:1; transform:none}
+  @media(prefers-reduced-motion:reduce){
+    .reveal{opacity:1; transform:none; transition:none}
+    .moon,.shot-hero,.glow{will-change:auto}
+    html{scroll-behavior:auto}
+  }
 </style>
 </head>
 <body>
-<div class="sky"></div><div class="stars"></div>
+<div class="sky"></div>
+<div class="glow a" data-depth="14"></div>
+<div class="glow b" data-depth="9"></div>
 
+<nav id="nav">
+  <a class="brand" href="#top"><span class="dot"></span> Night Conductor</a>
+  <div class="links">
+    <a href="#why">Why</a>
+    <a href="#how">How it works</a>
+    <a href="https://github.com/jkkorn/Night-Conductor">GitHub</a>
+    <a class="dl" href="https://github.com/jkkorn/Night-Conductor/releases">Download</a>
+  </div>
+</nav>
+
+<div id="top"></div>
 <div class="wrap">
-  <header>
-    <div class="badge-moon">🌙</div>
+
+  <header class="hero">
+    <div class="moon" id="moon" data-depth="-22"></div>
     <h1>Night Conductor</h1>
-    <p class="tag">Your <a href="https://conductor.build">Conductor</a> sessions hit the Claude usage
-      limit at 11pm. Night Conductor resumes them <b>while you sleep</b> — without blowing your weekly budget.</p>
+    <p class="tag">Your coding sessions hit Claude's limit at midnight.
+      <b>Night Conductor finishes them while you sleep.</b></p>
     <div class="cta">
-      <a class="btn primary" href="https://github.com/jkkorn/Night-Conductor#install--the-for-dummies-path">↓ Get it</a>
-      <a class="btn ghost" href="https://github.com/jkkorn/Night-Conductor">★ View on GitHub</a>
+      <a class="btn primary" href="https://github.com/jkkorn/Night-Conductor/releases">Download for Mac</a>
+      <a class="btn ghost" href="https://github.com/jkkorn/Night-Conductor">View the source</a>
     </div>
-    <img class="hero-img" src="day-cycle.gif" alt="Night Conductor popover, the header sky shifting with the time of day">
-    <p class="cap">A moon lives in your menu bar. The header is a living sky that follows the real clock.</p>
+    <img class="shot-hero" id="shot" src="popover.png" alt="The Night Conductor popover: live usage meters, the decision line, and stalled sessions waiting at the limit">
   </header>
 
-  <section>
-    <p class="problem">
-      It's midnight. You're three prompts deep into something good, and Claude stops:
-      <span class="err">"You've hit your session limit · resets 1:30am."</span>
-      You go to bed. The work just… sits there until morning.
-    </p>
+  <div class="moment reveal">
+    <div class="time">00:14</div>
+    <p>You're in flow. Then Claude stops.</p>
+    <div class="errbar">You've hit your session limit · resets 1:30am</div>
+    <p class="after">You go to sleep. The work doesn't have to.</p>
+  </div>
+
+  <section id="why">
+    <div class="why">
+      <div class="reveal">
+        <p class="eyebrow">Why I built this</p>
+        <h2>I made it for an app I love.</h2>
+      </div>
+      <div class="reveal">
+        <p class="lead">I run a lot of Claude Code sessions at once in Conductor. It changed how I build.</p>
+        <p>So first, a real thank you to the people who make it. Conductor is the thing I open every morning.</p>
+        <p>But I kept hitting the usage limit late at night, right in the middle of something good. The session would stop, and the work would wait until morning. I wanted it to keep going while I slept. So I made Night Conductor to sit quietly in the menu bar and pick the work back up the moment there's room.</p>
+        <span class="thanks">With thanks to the <a href="https://conductor.build">Conductor</a> team.</span>
+      </div>
+    </div>
   </section>
 
   <section>
-    <p class="eyebrow">How the night goes</p>
-    <h2>Watch · check · decide · resume</h2>
-    <p class="lede">Every few minutes inside your watch window (default 23:00–07:00):</p>
+    <div class="reveal">
+      <p class="eyebrow">Wherever you run Claude</p>
+      <h2>It connects to all of it.</h2>
+      <p class="body">One menu bar app, watching three places at once. Stalled sessions land in a single list, each resumed the right way for where it lives.</p>
+    </div>
+    <div class="three">
+      <div class="conn reveal">
+        <svg viewBox="0 0 24 24"><path d="M4 7l8-4 8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 17l8 4 8-4"/></svg>
+        <h3>Conductor</h3>
+        <p>Your parallel Conductor workspaces. It presses Conductor's own Retry, so the chat keeps going in place.</p>
+      </div>
+      <div class="conn reveal">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18"/><path d="M9 21h6"/></svg>
+        <h3>The Claude app</h3>
+        <p>Cowork sessions in the Claude desktop app, resumed inside their own sandbox where they belong.</p>
+      </div>
+      <div class="conn reveal">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M13 15h4"/></svg>
+        <h3>The terminal</h3>
+        <p>Plain Claude Code in your terminal, picked back up with <code>claude --resume</code>, exactly how you would.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="reveal">
+      <p class="eyebrow">How the night goes</p>
+      <h2>Watch, weigh the budget, decide, resume.</h2>
+      <p class="body">Every few minutes inside your window (23:00 to 07:00 by default), it runs the same quiet loop.</p>
+    </div>
     <div class="steps">
-      <div class="step"><div class="n">1</div><h3>Scan</h3><p>Reads Conductor's session DB (strictly read-only) for sessions stalled on a <code>429</code> usage-limit error.</p></div>
-      <div class="step"><div class="n">2</div><h3>Check budget</h3><p>Asks the official usage endpoint for your live 5-hour and weekly utilization — the same numbers <code>/usage</code> shows.</p></div>
-      <div class="step"><div class="n">3</div><h3>Decide</h3><p>Resumes only with real headroom: ceilings, weekly pacing, and morning protection so your window is fresh at wake.</p></div>
-      <div class="step"><div class="n">4</div><h3>Resume</h3><p>Presses Conductor's own Retry so the chat stays in sync. Spaced out across the night, re-checking budget each time.</p></div>
+      <div class="stp reveal"><h3>It scans</h3><p>Reads your sessions, read only, for anything whose last message is a <code>429</code> usage-limit error.</p></div>
+      <div class="stp reveal"><h3>It weighs the budget</h3><p>Checks your live 5-hour and weekly usage from the same endpoint <code>/usage</code> uses, with the token already in your Keychain.</p></div>
+      <div class="stp reveal"><h3>It decides</h3><p>Only resumes with real headroom. It respects your ceilings, paces the week, and leaves your mornings alone so a 6am resume can't lock you out of your own window.</p></div>
+      <div class="stp reveal"><h3>It resumes</h3><p>Presses Retry so the work continues in the chat. Spread across the night, re-checked after each one, capped so it never runs away with your week.</p></div>
     </div>
   </section>
 
   <section>
-    <p class="eyebrow">Careful with your tokens</p>
-    <h2>You're at the helm by day</h2>
-    <p class="lede">The night watch only takes over on your schedule, and never spends past the
-      limits you set. In plain language, the app always tells you what it's doing and why:</p>
-    <div class="quote">"You're at the helm — night watch starts at 23:00"<br><span>the calm daytime resting state</span></div>
-    <div class="quote">"Wiggle room: 29% of week used, 1.6 days to reset"<br><span>when it's genuinely clear to resume</span></div>
-    <div class="grid" style="margin-top:24px">
-      <div class="feature"><div class="ic">🌙</div><h3>Watches while you sleep</h3><p>Scans for stalled sessions every few minutes inside your window.</p></div>
-      <div class="feature"><div class="ic">⚖️</div><h3>Budget-aware</h3><p>5-hour + weekly ceilings, plus a pacing guard so it never burns the week too fast.</p></div>
-      <div class="feature"><div class="ic">☀️</div><h3>Morning protection</h3><p>Never starts a session within 5 hours of when you're back, so your window is fresh.</p></div>
-      <div class="feature"><div class="ic">💬</div><h3>Resumes in Conductor</h3><p>Presses Conductor's Retry via Accessibility, so the chat continues in place.</p></div>
+    <div class="reveal">
+      <p class="eyebrow">The interface</p>
+      <h2>Quiet, honest, glanceable.</h2>
+      <p class="body">A moon in your menu bar shows how much room you have. Open it for two live meters, a plain-language line about what it's doing, and everything waiting at the limit.</p>
     </div>
-  </section>
-
-  <section>
-    <p class="eyebrow">Harness-agnostic</p>
-    <h2>One list, every source</h2>
-    <p class="lede">Stalled sessions from all three show up together, badged by source, each resumed the faithful way.</p>
-    <table class="harness">
-      <tr><th>Source</th><th>Badge</th><th>How it resumes</th></tr>
-      <tr><td>Conductor</td><td><span class="pill">Conductor</span></td><td>presses Conductor's Retry, headless fallback</td></tr>
-      <tr><td>Claude desktop (Cowork)</td><td><span class="pill">Claude</span></td><td>presses Claude Desktop's Retry — stays sandboxed</td></tr>
-      <tr><td>Claude Code (terminal)</td><td><span class="pill">Terminal</span></td><td>headless <code>claude --resume</code> (faithful — not sandboxed)</td></tr>
-    </table>
-  </section>
-
-  <section>
-    <p class="eyebrow">The interface</p>
-    <h2>Glanceable, honest, quiet</h2>
-    <div class="shots">
+    <div class="shots reveal">
       <img src="popover.png" alt="Popover with live meters, the decision line, and stalled sessions">
-      <img src="settings.png" alt="Settings: watch hours, morning protection, budget ceilings">
+      <img src="settings.png" alt="Settings: watch hours, when you're back in the morning, and budget ceilings">
     </div>
-    <p class="lede" style="text-align:center; margin:26px auto 0">When the window ends it posts a one-line morning summary, and renders a card of your week:</p>
-    <img class="statcard" src="stat-card.png" alt="Weekly stat card you can share">
   </section>
 
   <section>
-    <p class="eyebrow">Install</p>
-    <h2>The for-dummies path</h2>
-    <p class="lede">Requires macOS 15+, <a href="https://conductor.build">Conductor</a>, and
-      <a href="https://claude.com/claude-code">Claude Code</a> logged in.</p>
-    <pre><code>git clone https://github.com/jkkorn/Night-Conductor.git
+    <div class="reveal">
+      <p class="eyebrow">Get it</p>
+      <h2>Free, open source, yours.</h2>
+    </div>
+    <div class="get">
+      <div class="panel reveal">
+        <h3>Download for Mac</h3>
+        <p>Grab the latest build, drag it into Applications, and click the moon. No terminal needed.</p>
+        <a class="btn primary" href="https://github.com/jkkorn/Night-Conductor/releases">Download for Mac</a>
+      </div>
+      <div class="panel reveal">
+        <h3>Build from source</h3>
+        <p>It's MIT licensed. Read every line, then build it yourself.</p>
+        <pre><code>git clone https://github.com/jkkorn/Night-Conductor
 cd Night-Conductor/NightConductor
-./build-app.sh
-# drag dist/Night Conductor.app into /Applications, then arm the 🌙</code></pre>
+./build-app.sh</code></pre>
+      </div>
+    </div>
   </section>
 
-  <footer>
-    Made with ❤️ in Brazil by <a href="https://www.linkedin.com/in/jkkorn">Jonathan Korn</a> ·
-    <a href="https://buymeacoffee.com/jkkorn">Buy me a coffee</a> ·
-    Open source (MIT) · Not affiliated with Conductor or Anthropic
-  </footer>
 </div>
+
+<footer>
+  Made with love in Brazil by <a href="https://www.linkedin.com/in/jkkorn">Jonathan Korn</a>.<br>
+  Special thanks to <a href="https://conductor.build">Conductor</a> for the app that started it.
+  Open source under MIT. <a href="https://buymeacoffee.com/jkkorn">Buy me a coffee</a> if it saved your night.<br>
+  Not affiliated with Conductor or Anthropic.
+</footer>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // nav background after scroll
+  var nav = document.getElementById('nav');
+  function onScroll(){ if(nav) nav.classList.toggle('scrolled', window.scrollY > 24); }
+  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+
+  // scroll-reveal
+  var items = document.querySelectorAll('.reveal');
+  if(reduce || !('IntersectionObserver' in window)){
+    items.forEach(function(el){ el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, {threshold:.16, rootMargin:'0px 0px -8% 0px'});
+    items.forEach(function(el){ io.observe(el); });
+  }
+
+  // cursor parallax: moon, glows, hero shot drift with the pointer
+  if(!reduce){
+    var layers = [].slice.call(document.querySelectorAll('[data-depth]'));
+    var shot = document.getElementById('shot');
+    var tx = 0, ty = 0, cx = 0, cy = 0, raf = null;
+    window.addEventListener('mousemove', function(ev){
+      tx = (ev.clientX / window.innerWidth  - .5);
+      ty = (ev.clientY / window.innerHeight - .5);
+      if(!raf) raf = requestAnimationFrame(tick);
+    }, {passive:true});
+    function tick(){
+      cx += (tx - cx) * .06; cy += (ty - cy) * .06;
+      layers.forEach(function(el){
+        var d = parseFloat(el.getAttribute('data-depth')) || 0;
+        el.style.transform = 'translate3d(' + (cx*d) + 'px,' + (cy*d) + 'px,0)';
+      });
+      if(shot){ shot.style.transform = 'translate3d(' + (cx*-8) + 'px,' + (cy*-6) + 'px,0) rotateX(' + (cy*1.4) + 'deg) rotateY(' + (cx*-1.8) + 'deg)'; }
+      if(Math.abs(tx-cx) > .001 || Math.abs(ty-cy) > .001){ raf = requestAnimationFrame(tick); } else { raf = null; }
+    }
+  }
+})();
+</script>
 </body>
 </html>

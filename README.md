@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Your <a href="https://conductor.build">Conductor</a> sessions hit the Claude usage limit at 11pm.<br>
-  Night Conductor resumes them while you sleep — without blowing your weekly budget.</strong>
+  Night Conductor finishes them while you sleep, without blowing your weekly budget.</strong>
 </p>
 
 <p align="center">
@@ -19,52 +19,63 @@
 <p align="center">
   <img src="docs/day-cycle.gif" width="340" alt="The Night Conductor popover, its header sky shifting from dusk to midnight to dawn">
 </p>
-<p align="center"><em>A moon lives in your menu bar. The header is a living sky that follows the real clock.</em></p>
+<p align="center"><em>A moon lives in your menu bar. The header sky follows the real clock.</em></p>
 
 ---
 
-It's midnight. You're three prompts deep into something good, and Claude stops:
-**"You've hit your session limit · resets 1:30am."** You go to bed. The work
-just… sits there until morning.
+It's midnight. You're a few prompts deep into something good, and Claude stops:
+"You've hit your session limit, resets 1:30am." So you go to bed, and the work
+just sits there until morning.
 
-Night Conductor is a tiny macOS menu bar app that watches for exactly that.
-While you sleep, it notices your stalled [Conductor](https://conductor.build)
-sessions, checks your live Claude usage, and resumes the work the moment
-there's budget headroom — pressing Conductor's own **Retry** so the chat stays
-in sync. You wake up to finished tasks instead of a paused cursor.
+Night Conductor is a small macOS menu bar app that waits for exactly that.
+While you sleep, it spots your stalled sessions, checks your live Claude usage,
+and picks the work back up the moment your limit resets and there's budget to
+spare. It presses the session's own Retry, so the chat stays in sync. You wake
+up to finished work instead of a paused cursor.
 
-It is deliberately careful with your tokens. During the day **you're at the
-helm**; the night watch only takes over on your schedule, and never spends past
-the ceilings and pacing limits you set.
+It is careful with your tokens on purpose. During the day you're at the helm.
+The night shift only takes over on the schedule you set, and it never spends
+past the ceilings you give it.
 
-## How it works
+## It works wherever you run Claude
 
-Every few minutes inside your watch window (default **23:00–07:00**):
+Stalled sessions from all three places show up in one list, each one tagged by
+where it came from and resumed the right way for that app.
 
-1. **Scan** — reads Conductor's session database (strictly read-only) for
-   sessions whose last message is a `429` *"You've hit your usage limit"* error.
-2. **Check budget** — queries the official usage endpoint (the same numbers
-   `/usage` shows in Claude Code) for your live 5-hour and weekly utilization,
+| You run Claude in | Tag | How Night Conductor resumes it |
+|-------------------|-----|--------------------------------|
+| [Conductor](https://conductor.build) | `Conductor` | presses Conductor's own Retry, falls back to headless if that fails |
+| The Claude desktop app (Cowork) | `Claude` | presses Claude Desktop's Retry, staying inside its sandbox |
+| The terminal (Claude Code) | `Terminal` | runs `claude --resume` directly, which is exactly how you'd do it yourself |
+
+If the same session shows up in more than one place, it only counts once.
+
+## How the night goes
+
+Every few minutes inside your watch window (23:00 to 07:00 by default):
+
+1. **It scans.** Reads the session database (read only, it never writes back)
+   for anything whose last message is a `429` usage-limit error.
+2. **It checks the budget.** Asks the official usage endpoint for your live
+   5-hour and weekly numbers, the same ones `/usage` shows in Claude Code,
    using the OAuth token Claude Code already keeps in your Keychain.
-3. **Decide** — resumes only when it's genuinely safe:
-   - 5-hour window below the ceiling (default 85%)
-   - weekly window below the stop line (default 90%)
-   - **weekly pacing** — if you've burned more of your week than the time
-     that's elapsed (plus a margin), it holds. 70% used with five days left?
-     It won't make that worse overnight.
-   - **morning protection** — you say when you're back (default 7:00); it never
-     starts a session within 5 hours of that, so a 6am resume can't anchor a
-     usage window that locks *you* out until 11am.
-4. **Resume** — presses Conductor's **Retry** via the Accessibility API so the
-   work continues right inside the chat. Resumes are **spaced out** across the
-   night, re-checking budget after each one. Caps: 3 retries per session,
-   10 resumes per night. If usage can't be determined, it never resumes
-   (fail-closed).
+3. **It decides.** It only resumes when there's real room:
+   - your 5-hour window is under the ceiling (85% by default)
+   - your weekly window is under the stop line (90% by default)
+   - you aren't burning the week faster than it's passing. If you're at 70%
+     with five days left, it holds rather than make that worse overnight.
+   - it leaves your mornings alone. You tell it when you're back (7:00 by
+     default), and it won't start a session in the five hours before that, so a
+     6am resume can't lock you out of your own window until 11am.
+4. **It resumes.** It presses Retry so the work continues right in the chat.
+   Resumes are spread across the night with a re-check after each one. It stops
+   at 3 retries per session and 10 resumes a night. If it can't read your
+   usage, it does nothing, because guessing is how you blow a budget.
 
-## Install — the for-dummies path
+## Install
 
-Requires macOS 15+, [Conductor](https://conductor.build), and
-[Claude Code](https://claude.com/claude-code) logged in with a subscription.
+You'll need macOS 15 or newer, [Conductor](https://conductor.build), and
+[Claude Code](https://claude.com/claude-code) signed in with a subscription.
 
 ```bash
 git clone https://github.com/jkkorn/Night-Conductor.git
@@ -72,80 +83,65 @@ cd Night-Conductor/NightConductor
 ./build-app.sh
 ```
 
-Drag `dist/Night Conductor.app` into **Applications** and open it. That's the
-whole install. Then:
+Drag `dist/Night Conductor.app` into Applications and open it. That's it. Then:
 
-1. Click the 🌙 in your menu bar.
-2. Flip the switch to **arm the night watch**.
-3. In settings (⚙): turn on **Launch at login**.
-4. First run only: allow Keychain access (**Always Allow**) and grant
-   **Accessibility** so it can press Retry inside Conductor.
+1. Click the moon in your menu bar.
+2. Flip the switch to arm the night watch.
+3. Open settings and turn on Launch at login.
+4. The first time, allow Keychain access (click Always Allow) and grant
+   Accessibility so it can press Retry inside Conductor.
 
-> **Staying awake.** While the watch is armed and inside its window, Night
-> Conductor keeps your Mac awake by itself (a power assertion — no command, no
-> password). If your Mac is *fully* asleep before the window starts, open
-> settings and tap **Nightly wake** to schedule a firmware wake at your start
-> hour.
+While the watch is armed and inside its window, Night Conductor keeps your Mac
+awake on its own with a power assertion. No command, no password. If your Mac
+is fully asleep before the window starts, open settings and tap Nightly wake to
+schedule a firmware wake at your start hour.
 
 ## The interface
 
 <p align="center">
-  <img src="docs/popover.png" width="330" alt="Popover: live meters, the decision line, and stalled sessions">
+  <img src="docs/popover.png" width="330" alt="Popover with live meters, the decision line, and stalled sessions">
   &nbsp;&nbsp;
   <img src="docs/settings.png" width="330" alt="Settings: watch hours, morning protection, budget ceilings">
 </p>
 
-- **Menu bar** — a moon beside your live 5-hour usage, so you can glance at how
-  much room you have without opening anything.
-- **Two meters** — your live 5-hour and weekly windows, with reset times.
-- **The decision line** — in plain language, exactly what it's doing and why:
-  *"You're at the helm — night watch starts at 23:00"* by day, *"Wiggle room:
-  29% of week used, 1.6 days to reset"* when it's clear to go.
-- **Stalled sessions** — every session waiting at the limit, with a
-  **Resume now** that skips the schedule but never the budget gates.
-- **Activity log** — what got conducted last night.
+- **Menu bar.** A moon next to your live 5-hour usage, so you can see how much
+  room you have without opening anything.
+- **Two meters.** Your 5-hour and weekly windows, with reset times.
+- **The decision line.** Plain language about what it's doing and why. By day
+  it reads "You're at the helm, night watch starts at 23:00." When it's clear
+  to go, "Wiggle room: 29% of week used, 1.6 days to reset."
+- **Stalled sessions.** Everything waiting at the limit, with a Resume now
+  button that skips the schedule but still respects the budget.
+- **Activity log.** What got done last night.
 
-## Works across every harness
+## During the day, too
 
-Stalled sessions from all three show up in one list, badged by source, each
-resumed the faithful way:
+The night window is the default, but stalls happen mid-afternoon as well.
 
-| Source | Badge | How it resumes |
-|--------|-------|----------------|
-| Conductor | `Conductor` | presses Conductor's Retry (UI), headless fallback |
-| Claude desktop app (Cowork) | `Claude` | presses Claude Desktop's Retry — stays in its sandbox |
-| Standalone Claude Code (terminal) | `Terminal` | headless `claude --resume` (these aren't sandboxed, so it's faithful) |
+Pin a session with the loop icon on its row and it resumes around the clock,
+budget permitting, instead of waiting for night. Or hit Resume now, which goes
+immediately and ignores the schedule and the budget gates. The only thing that
+can stop a manual resume is Anthropic's actual limit.
 
-Sessions that show up in more than one place are de-duplicated by session id.
+Sessions you haven't pinned still wait for the night window, so a busy day
+doesn't quietly drain your week.
 
-## Auto-resume by day, too
+## Morning summary and weekly stats
 
-The night window is the default, but stalls happen during work hours:
-
-- **Pin a session** (the ⟳ on each row) — it auto-resumes **around the clock**,
-  budget permitting, not just at night.
-- **Resume now** — your explicit call; resumes immediately, bypassing the
-  schedule and budget gates (only Anthropic's real limit can stop it).
-
-Unpinned sessions still wait for the night window, so a busy day doesn't quietly
-drain your weekly budget.
-
-## Morning summary & weekly stats
-
-When the window ends, Night Conductor posts a one-line morning notification
-("Resumed 3 sessions while you slept"). The share button renders a card of your
-week you can drop straight into a post:
+When the window closes, Night Conductor posts a one-line notification ("Resumed
+3 sessions while you slept"). The share button renders a card of your week you
+can drop straight into a post.
 
 <p align="center">
   <img src="docs/stat-card.png" width="420" alt="Weekly stat card">
 </p>
 
-## Raycast extension & CLI
+## Raycast extension and CLI
 
-A companion [Raycast](https://raycast.com) extension lives in
-[`raycast/`](raycast/) — a menu-bar command for live usage + stalled count, and
-a list view to resume stalled sessions. The same logic also ships as a
-zero-dependency Python package for servers and tinkerers:
+There's a companion [Raycast](https://raycast.com) extension in
+[`raycast/`](raycast/) with a menu-bar command for live usage and a list view
+to resume stalled sessions. The same logic also ships as a zero-dependency
+Python package for servers and tinkerers:
 
 ```bash
 python3 -m autoconduct status     # usage, stalled sessions, decision
@@ -154,41 +150,42 @@ python3 -m autoconduct install    # launchd agent, ticks every 10 min
 
 ## Good to know
 
-- **Read-only by design.** Night Conductor never writes to Conductor's
-  database. Every file change and commit a resumed turn makes lands in the
-  workspace, visible in Conductor's diff view.
-- Overnight runs use Claude Code's `acceptEdits` permission mode: edit files
-  yes, arbitrary unapproved commands no.
-- Your OAuth token is read from the Keychain per request and never stored or
+- It never writes to the session database. Anything a resumed turn changes
+  lands in the workspace, where you can see it in Conductor's diff view.
+- Overnight runs use Claude Code's `acceptEdits` mode. It can edit files, but
+  not run commands you haven't approved.
+- Your OAuth token is read from the Keychain per request. It's never stored or
   logged.
-- Not affiliated with [Conductor](https://conductor.build) or Anthropic — just
-  built with love by a heavy user.
+- Not affiliated with [Conductor](https://conductor.build) or Anthropic. I just
+  use both a lot.
 
 ## FAQ
 
 **Does the Conductor chat update when it resumes?**
-Yes — by default it presses the session's own Retry via the Accessibility API,
-so the conversation continues in place. If that ever fails it falls back to a
-headless `claude --resume`: the work still lands in the workspace, but the chat
-shows a stale error banner.
+Yes. By default it presses the session's own Retry through the Accessibility
+API, so the conversation continues in place. If that fails it falls back to a
+headless `claude --resume`. The work still lands in the workspace, but the chat
+keeps showing the old error banner until you reopen it.
 
 **I granted Accessibility but it still shows the orange warning.**
-If you build the app yourself, each rebuild gets a new ad-hoc signature and
-macOS silently ignores the old grant. Run
-`tccutil reset Accessibility app.night-conductor` and grant again, or remove +
-re-add it in System Settings → Privacy & Security → Accessibility.
+If you build the app yourself, every rebuild gets a new ad-hoc signature and
+macOS quietly ignores the old grant. Run
+`tccutil reset Accessibility app.night-conductor` and grant it again, or remove
+and re-add it under System Settings, Privacy & Security, Accessibility.
 
-**The popover keeps closing by itself.**
-A menu bar manager (Ice, Bartender) with auto-rehide will close any open menu
-bar popover. Pin Night Conductor to the always-visible section.
+**The popover keeps closing on its own.**
+A menu bar manager like Ice or Bartender with auto-rehide will close any open
+menu bar popover when it hides. Pin Night Conductor to the always-visible
+section.
 
 ## About
 
-Made with ❤️ in Brazil by **[Jonathan Korn](https://www.linkedin.com/in/jkkorn)**.
-Built because I love [Conductor](https://conductor.build) and kept hitting my
-limits at midnight. If it saved your night,
-[buy me a coffee](https://buymeacoffee.com/jkkorn) ☕.
+Made with love in Brazil by [Jonathan Korn](https://www.linkedin.com/in/jkkorn).
+I built it for [Conductor](https://conductor.build), an app I genuinely love,
+because I kept hitting my limit at midnight and wanted the work to keep going
+while I slept. If it saved your night, you can
+[buy me a coffee](https://buymeacoffee.com/jkkorn).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
