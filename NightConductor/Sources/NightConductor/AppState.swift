@@ -177,7 +177,8 @@ final class AppState: ObservableObject {
         }
         decision = Decision(
             resume: false,
-            reason: usage == nil ? "Checking usage…" : "Usage data is stale — holding"
+            reason: usage == nil ? "Checking usage…" : "Usage data is stale — holding",
+            state: .checking
         )
         return false
     }

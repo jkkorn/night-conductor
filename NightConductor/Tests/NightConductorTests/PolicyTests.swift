@@ -33,6 +33,28 @@ final class PolicyTests: XCTestCase {
         XCTAssertTrue(Policy.inActiveHours(hour: 5, start: 0, end: 0)) // always
     }
 
+    func testDecisionStatesReflectWhyNotResuming() {
+        let noon = date(hour: 12)
+        // Daytime: off the night watch — a calm standing-by state, not a hold,
+        // and the copy no longer says the confusing "active hours".
+        let standby = Policy.shouldResume(
+            usage: snapshot(now: noon), config: PolicyConfig(), now: noon, calendar: utc)
+        XCTAssertEqual(standby.state, .standingBy)
+        XCTAssertFalse(standby.reason.localizedCaseInsensitiveContains("active hours"))
+
+        // In-window, healthy budget: clear to resume.
+        let twoAM = date(hour: 2)
+        let go = Policy.shouldResume(
+            usage: snapshot(now: twoAM), config: PolicyConfig(), now: twoAM, calendar: utc)
+        XCTAssertEqual(go.state, .resuming)
+
+        // In-window, over the 5h ceiling: an amber hold.
+        let hold = Policy.shouldResume(
+            usage: snapshot(fiveHour: 90, now: twoAM), config: PolicyConfig(),
+            now: twoAM, calendar: utc)
+        XCTAssertEqual(hold.state, .holding)
+    }
+
     func testFiveHourCeilingHolds() {
         let now = date(hour: 2)
         let decision = Policy.shouldResume(

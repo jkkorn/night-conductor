@@ -84,9 +84,20 @@ struct StalledSession: Identifiable, Equatable {
     }
 }
 
+/// Why the watch is (not) resuming, so the UI can speak in the right tone.
+/// Crucially, being off the night watch during the day is NOT a warning —
+/// it's the resting state — so it must not look like the budget-hold states.
+enum DecisionState: Equatable {
+    case resuming    // green — clear to resume now
+    case standingBy  // calm — intentionally idle; you're at the helm, watch is off
+    case holding     // amber — on watch, but a budget/timing gate is holding
+    case checking    // neutral — usage not known yet
+}
+
 struct Decision: Equatable {
     let resume: Bool
     let reason: String
+    var state: DecisionState = .holding
 }
 
 struct PolicyConfig {
