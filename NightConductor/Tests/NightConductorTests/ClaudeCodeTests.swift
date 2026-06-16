@@ -55,4 +55,21 @@ final class ClaudeCodeTests: XCTestCase {
         try seed(uuid: "u3", lines: [userLine(), errorAssistant()], cwd: "/no/such/dir")
         XCTAssertTrue(ClaudeCodeDB.findStalledSessions(root: root.path, now: now).isEmpty)
     }
+
+    func testIgnoresConductorOwnedTranscripts() throws {
+        // A Conductor workspace transcript also lives in ~/.claude/projects —
+        // the terminal scanner must not claim it (Conductor's scanner does).
+        let conductorCwd = root.appendingPathComponent("conductor/workspaces/RituaGym/new-york")
+        try FileManager.default.createDirectory(at: conductorCwd, withIntermediateDirectories: true)
+        try seed(uuid: "u4", lines: [userLine(), errorAssistant()], cwd: conductorCwd.path)
+        XCTAssertTrue(ClaudeCodeDB.findStalledSessions(root: root.path, now: now).isEmpty)
+    }
+
+    func testDedupesToOnePerWorkspace() throws {
+        // Several stalled transcripts in the same cwd → one entry, not many.
+        try seed(uuid: "w1", lines: [userLine(), errorAssistant()])
+        try seed(uuid: "w2", lines: [userLine(), errorAssistant()])
+        try seed(uuid: "w3", lines: [userLine(), errorAssistant()])
+        XCTAssertEqual(ClaudeCodeDB.findStalledSessions(root: root.path, now: now).count, 1)
+    }
 }

@@ -35,11 +35,25 @@ enum ClaudeCodeDB {
         }
         recent.sort { $0.mtime > $1.mtime }
 
+        // Walk newest-first; keep at most one stalled session per workspace
+        // (the latest), so a workspace's pile of old transcripts doesn't each
+        // count as a separate stall.
         var out: [StalledSession] = []
+        var seenWorkspaces = Set<String>()
         for entry in recent.prefix(maxFilesScanned) {
-            if let session = parse(url: entry.url, now: now) { out.append(session) }
+            guard let session = parse(url: entry.url, now: now) else { continue }
+            guard seenWorkspaces.insert(session.workspacePath).inserted else { continue }
+            out.append(session)
         }
         return out
+    }
+
+    /// Conductor and Claude Desktop run Claude Code under the hood and write
+    /// transcripts here too. They have their own scanners (with faithful
+    /// in-app resume), so the terminal scanner must not also claim them.
+    private static func isHarnessOwned(_ cwd: String) -> Bool {
+        cwd.contains("/conductor/workspaces/")
+            || cwd.contains("/Library/Application Support/Claude/local-agent-mode-sessions")
     }
 
     private static func parse(url: URL, now: Date) -> StalledSession? {
@@ -66,6 +80,7 @@ enum ClaudeCodeDB {
         if now.timeIntervalSince(last.ts) > maxStallAge { return nil }
 
         let workingDir = cwd ?? decodeProjectDir(url.deletingLastPathComponent().lastPathComponent)
+        if isHarnessOwned(workingDir) { return nil } // Conductor / Claude Desktop own these
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: workingDir, isDirectory: &isDir),
               isDir.boolValue else { return nil }
@@ -88,21 +103,20 @@ enum ClaudeCodeDB {
         return content.compactMap { $0["text"] as? String }.joined(separator: " ")
     }
 
-    /// First user prompt, for a human-readable title (cheap head read).
+    /// First typed user prompt, for a human-readable title (cheap head read).
+    /// Only string-content user messages count — array content is tool
+    /// results / injected context, not something the user typed.
     private static func firstUserPrompt(_ url: URL) -> String? {
         for line in head(url, maxBytes: headBytes) {
             guard let data = line.data(using: .utf8),
                   let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   event["type"] as? String == "user",
-                  let message = event["message"] as? [String: Any]
+                  let message = event["message"] as? [String: Any],
+                  let text = message["content"] as? String
             else { continue }
-            if let text = message["content"] as? String {
-                return String(text.prefix(60))
-            }
-            if let content = message["content"] as? [[String: Any]],
-               let text = content.compactMap({ $0["text"] as? String }).first {
-                return String(text.prefix(60))
-            }
+            let clean = text.replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespaces)
+            if !clean.isEmpty { return String(clean.prefix(50)) }
         }
         return nil
     }
