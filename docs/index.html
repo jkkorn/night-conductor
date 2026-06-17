@@ -52,9 +52,7 @@
     border-bottom:1px solid transparent}
   nav.scrolled{background:rgba(8,8,16,.72); backdrop-filter:saturate(160%) blur(16px); border-bottom-color:var(--line)}
   nav .brand{display:flex; align-items:center; gap:10px; font-family:var(--serif); font-size:22px; letter-spacing:.01em}
-  nav .brand .dot{width:13px; height:13px; border-radius:50%;
-    background:radial-gradient(circle at 32% 30%, #fff, #c7c6e8 55%, #8f8fc0);
-    box-shadow:0 0 14px rgba(190,190,255,.7)}
+  nav .brand .navicon{width:24px; height:24px; border-radius:7px; box-shadow:0 0 12px rgba(150,140,255,.4)}
   nav .links{display:flex; align-items:center; gap:26px; font-size:14.5px; color:var(--dim)}
   nav .links a{transition:color .2s}
   nav .links a:hover{color:var(--ink)}
@@ -64,18 +62,8 @@
 
   /* hero */
   .hero{position:relative; text-align:center; padding:188px 0 70px}
-  .moon{position:relative; width:128px; height:128px; margin:0 auto 30px; border-radius:50%; will-change:transform;
-    background:
-      radial-gradient(38px 34px at 38% 32%, #ffffff 0%, #eceaff 38%, #d6d4f2 60%, #b9b7df 78%, #9a98c8 100%);
-    box-shadow:
-      0 0 0 1px rgba(255,255,255,.06) inset,
-      -14px -10px 30px rgba(120,116,180,.35) inset,
-      0 0 70px 14px rgba(173,170,255,.45),
-      0 0 160px 40px rgba(120,110,230,.28);}
-  .moon::before,.moon::after{content:""; position:absolute; border-radius:50%;
-    background:radial-gradient(circle at 40% 35%, rgba(120,118,160,.30), rgba(120,118,160,0) 70%)}
-  .moon::before{width:26px; height:26px; top:58%; left:30%}
-  .moon::after{width:16px; height:16px; top:30%; left:62%}
+  .appicon{display:block; width:116px; height:116px; margin:0 auto 30px; border-radius:26px; will-change:transform;
+    box-shadow:0 22px 60px rgba(0,0,0,.55), 0 0 90px rgba(150,140,255,.30)}
   h1{font-family:var(--serif); font-weight:400; font-size:clamp(54px,9vw,96px);
     line-height:.98; letter-spacing:.005em; margin-bottom:18px}
   .tag{font-size:clamp(19px,2.4vw,23px); color:var(--dim); max-width:600px; margin:0 auto; line-height:1.5}
@@ -142,8 +130,10 @@
   .stp code{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:13px; color:#cfd0ff; background:rgba(167,173,255,.1); padding:1px 6px; border-radius:5px}
 
   /* interface */
-  .shots{display:flex; gap:24px; justify-content:center; flex-wrap:wrap; margin-top:36px}
-  .shots img{width:300px; max-width:90%; border-radius:18px; border:1px solid var(--line); box-shadow:0 30px 70px rgba(0,0,0,.5)}
+  .shots{display:flex; gap:40px; justify-content:center; align-items:flex-start; flex-wrap:wrap; margin-top:42px}
+  .shots figure{margin:0; display:flex; flex-direction:column; align-items:center; gap:14px}
+  .shots img{width:300px; max-width:88vw; height:auto; border-radius:18px; border:1px solid var(--line); box-shadow:0 30px 70px rgba(0,0,0,.5); display:block}
+  .shots figcaption{color:var(--dim); font-size:13.5px; letter-spacing:.01em}
 
   /* get it */
   .get{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:34px}
@@ -174,7 +164,7 @@
 <div class="glow b" data-depth="9"></div>
 
 <nav id="nav">
-  <a class="brand" href="#top"><span class="dot"></span> Night Conductor</a>
+  <a class="brand" href="#top"><img class="navicon" src="icon.png" alt=""> Night Conductor</a>
   <div class="links">
     <a href="#why">Why</a>
     <a href="#how">How it works</a>
@@ -187,7 +177,7 @@
 <div class="wrap">
 
   <header class="hero">
-    <div class="moon" id="moon" data-depth="-22"></div>
+    <img class="appicon" data-depth="-18" src="icon.png" alt="Night Conductor app icon: a cream crescent moon and stars on a deep navy rounded square">
     <h1>Night Conductor</h1>
     <p class="tag">Your coding sessions hit Claude's limit at midnight.
       <b>Night Conductor finishes them while you sleep.</b></p>
@@ -266,8 +256,14 @@
       <p class="body">A moon in your menu bar shows how much room you have. Open it for two live meters, a plain-language line about what it's doing, and everything waiting at the limit.</p>
     </div>
     <div class="shots reveal">
-      <img src="popover.png" alt="Popover with live meters, the decision line, and stalled sessions">
-      <img src="settings.png" alt="Settings: watch hours, when you're back in the morning, and budget ceilings">
+      <figure>
+        <img src="popover.png" alt="Popover with live meters, the decision line, and stalled sessions">
+        <figcaption>The popover</figcaption>
+      </figure>
+      <figure>
+        <img src="settings.png" alt="Settings: watch hours, when you're back in the morning, and budget ceilings">
+        <figcaption>Settings</figcaption>
+      </figure>
     </div>
   </section>
 

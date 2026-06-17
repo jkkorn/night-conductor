@@ -72,11 +72,24 @@ enum Screenshotter {
         hosting.frame = NSRect(origin: .zero, size: fitting)
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
 
-        guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
+        // Render at 2x so docs/marketing images are retina-crisp. An offscreen
+        // window has a 1.0 backing scale, so bitmapImageRepForCachingDisplay
+        // would give soft 1x output; allocate an explicit 2x rep instead.
+        let scale = 2
+        let bounds = hosting.bounds
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(bounds.width) * scale,
+            pixelsHigh: Int(bounds.height) * scale,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ) else {
             FileHandle.standardError.write(Data("snapshot failed\n".utf8))
             exit(1)
         }
-        hosting.cacheDisplay(in: hosting.bounds, to: rep)
+        rep.size = bounds.size // points; 2x pixels gives a retina-scale image
+        hosting.cacheDisplay(in: bounds, to: rep)
         guard let png = rep.representation(using: .png, properties: [:]) else {
             FileHandle.standardError.write(Data("encode failed\n".utf8))
             exit(1)
