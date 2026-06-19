@@ -66,7 +66,11 @@ struct MenuView: View {
         // Opening the popover is an explicit "show me now". If the cached
         // reading is stale, force a refresh (which also punches through a 429
         // backoff); if it's already fresh, stay throttled to avoid hammering.
-        .onAppear { Task { await state.refreshUsage(force: !state.usageIsFresh()) } }
+        // Never in screenshot mode — docs must use curated demo data, not live.
+        .onAppear {
+            guard !state.isScreenshot else { return }
+            Task { await state.refreshUsage(force: !state.usageIsFresh()) }
+        }
     }
 
     // Living night-sky header: a drifting aurora + twinkling starfield, with
@@ -187,7 +191,7 @@ struct MenuView: View {
         if state.stalled.isEmpty {
             HStack(spacing: Design.m) {
                 Image(systemName: "moon.zzz.fill").foregroundStyle(.secondary)
-                Text("No stalled sessions — all quiet")
+                Text("No stalled sessions, all quiet")
                     .font(.callout).foregroundStyle(.secondary)
             }
             .padding(.vertical, Design.s)
@@ -207,7 +211,7 @@ struct MenuView: View {
                     stalledRow(session)
                 }
                 if state.stalled.count > maxStalledRows {
-                    Text("+ \(state.stalled.count - maxStalledRows) more — pin the ones you want resumed by day")
+                    Text("+ \(state.stalled.count - maxStalledRows) more, pin the ones you want resumed by day")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.leading, 2)
@@ -221,7 +225,7 @@ struct MenuView: View {
                 }
                 .buttonStyle(GlowButtonStyle(disabled: state.isWorking))
                 .disabled(state.isWorking)
-                .help("Resumes now — bypasses the schedule and budget gates")
+                .help("Resumes now, bypasses the schedule and budget gates")
             }
         }
     }
@@ -260,7 +264,7 @@ struct MenuView: View {
             }
             .buttonStyle(.plain)
             .help(pinned
-                  ? "Auto-resuming any time — click to stop"
+                  ? "Auto-resuming any time, click to stop"
                   : "Auto-resume this session any time (not just at night)")
         }
         .padding(.vertical, 2)
@@ -383,7 +387,7 @@ struct UsageMeter: View {
                 Text(label).font(.subheadline.weight(.medium))
                 Spacer()
                 Text(resetText).font(.caption).foregroundStyle(.secondary)
-                Text(window == nil ? "–" : "\(Int(value))%")
+                Text(window == nil ? "·" : "\(Int(value))%")
                     .font(.subheadline.weight(.bold).monospacedDigit())
                     .foregroundStyle(Color.usageStatus(value))
                     .contentTransition(.numericText())

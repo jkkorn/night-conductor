@@ -37,7 +37,7 @@ enum Policy {
             // over, not "outside <something> hours".
             return Decision(
                 resume: false,
-                reason: "You're at the helm — night watch starts at \(config.startHour):00",
+                reason: "You're at the helm, night watch starts at \(config.startHour):00",
                 state: .standingBy
             )
         }
