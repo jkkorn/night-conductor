@@ -33,4 +33,16 @@ final class UsageFetchTests: XCTestCase {
     func testFirstLoadAlwaysFetches() {
         XCTAssertTrue(should(force: false, hasUsage: false, fresh: false, inBackoff: false))
     }
+
+    // Skip a doomed usage call when the Claude Code token is already expired,
+    // so we tell the user to refresh instead of silently holding (and we don't
+    // hammer the endpoint with calls that will just 401).
+    func testTokenExpiry() {
+        let now = Date()
+        XCTAssertTrue(UsageClient.isExpired(now.addingTimeInterval(-10), now: now))   // past
+        XCTAssertFalse(UsageClient.isExpired(now.addingTimeInterval(3600), now: now)) // hour left
+        XCTAssertFalse(UsageClient.isExpired(nil, now: now))                          // unknown: let the call decide
+        // clock-skew buffer: expiring in 30s is treated as expired (default 60s skew)
+        XCTAssertTrue(UsageClient.isExpired(now.addingTimeInterval(30), now: now))
+    }
 }

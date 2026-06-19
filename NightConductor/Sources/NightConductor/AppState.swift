@@ -31,6 +31,7 @@ final class AppState: ObservableObject {
     private var usageBackoffUntil: Date?   // set on a 429, grows exponentially
     private var usageBackoffStep = 0
     private var usageJitter: Double = 0     // randomized offset so polls desync
+    private var signInExpired = false       // Claude Code token expired → tell the user
     private var lastInWindow: Bool?
     private var lastClaudeCodeScan: Date?
     private var cachedClaudeCode: [StalledSession] = []
@@ -38,8 +39,10 @@ final class AppState: ObservableObject {
     // running a resume pass at the same time (which could double-run a
     // session and bypass the per-night caps).
     private var isResuming = false
+    let isScreenshot: Bool  // true → inert demo state; never hit the live API
 
     init(forScreenshots: Bool = false) {
+        isScreenshot = forScreenshots
         UserDefaults.standard.register(defaults: [
             "armed": true,
             "startHour": 23,
@@ -150,12 +153,18 @@ final class AppState: ObservableObject {
                 lastUsageFetchAt = Date()
                 usageBackoffUntil = nil
                 usageBackoffStep = 0
+                signInExpired = false
                 usageJitter = Double(Int.random(in: 0...45)) // re-roll for next time
             } catch let error as UsageError where error.isRateLimited {
                 let delays = [300.0, 600.0, 1200.0, 1800.0] // 5, 10, 20, 30 min
                 usageBackoffStep = min(usageBackoffStep + 1, delays.count)
                 usageBackoffUntil = now.addingTimeInterval(delays[usageBackoffStep - 1])
-                log("Usage rate-limited — backing off \(Int(delays[usageBackoffStep - 1] / 60))m")
+                log("Usage rate-limited, backing off \(Int(delays[usageBackoffStep - 1] / 60))m")
+            } catch let error as UsageError where error.isSignInExpired {
+                // The fetch was skipped/refused because the Claude Code token
+                // expired. No backoff (the call is cheap and we never hit the
+                // network) — just surface it so the user knows to refresh.
+                signInExpired = true
             } catch {
                 // transient / network — keep the cached reading
             }
@@ -191,11 +200,15 @@ final class AppState: ObservableObject {
             )
             return true
         }
-        decision = Decision(
-            resume: false,
-            reason: usage == nil ? "Checking usage…" : "Usage data is stale — holding",
-            state: .checking
-        )
+        let reason: String
+        if signInExpired {
+            reason = "Claude sign-in expired. Open Claude Code or Conductor to refresh"
+        } else if usage == nil {
+            reason = "Checking usage…"
+        } else {
+            reason = "Usage data is stale, holding"
+        }
+        decision = Decision(resume: false, reason: reason, state: .checking)
         return false
     }
 
@@ -264,7 +277,7 @@ final class AppState: ObservableObject {
         sessions: [StalledSession], config: PolicyConfig, manual: Bool
     ) async {
         guard !isResuming else {
-            if manual { log("Busy resuming — try again in a moment") } // don't drop silently
+            if manual { log("Busy resuming, try again in a moment") } // don't drop silently
             return
         } // never run two passes at once
         isResuming = true
@@ -329,7 +342,7 @@ final class AppState: ObservableObject {
                     }.value
                     handedToApp = result.ok
                     if !result.ok {
-                        log("↻ UI resume failed (\(result.detail)) — falling back to headless")
+                        log("↻ UI resume failed (\(result.detail)), falling back to headless")
                     }
                 }
                 if !result.ok, let claudePath = await claudeBinary() {
@@ -350,7 +363,7 @@ final class AppState: ObservableObject {
 
             currentlyResuming = nil
             if handedToApp {
-                log("✓ \(session.title) resumed inside \(session.source.label) — chat stays in sync")
+                log("✓ \(session.title) resumed inside \(session.source.label), chat stays in sync")
             } else {
                 log(result.ok ? "✓ \(session.title) finished a run" : "✗ \(session.title): \(result.detail)")
             }
@@ -381,11 +394,11 @@ final class AppState: ObservableObject {
             // bursting. The next (jittered) tick re-checks budget and takes
             // the next session. A manual pass keeps going through the list.
             if handedToApp {
-                log("Handed to \(session.source.label) — next session shortly")
+                log("Handed to \(session.source.label), next session shortly")
                 break
             }
             if result.ok, !manual {
-                log("Resumed \(session.title) — spacing out, next at the next cycle")
+                log("Resumed \(session.title), spacing out, next at the next cycle")
                 break
             }
             // Otherwise (failed, or a manual headless run) try the next now.
@@ -405,7 +418,7 @@ final class AppState: ObservableObject {
         guard count > 0 else { return }
         let latest = ResumeHistory.load().sorted { $0.date > $1.date }.first?.title
         Notifications.postMorningSummary(count: count, sampleTitle: latest)
-        log("🌅 Good morning — \(count) resumed overnight")
+        log("🌅 Good morning, \(count) resumed overnight")
     }
 
     private func log(_ message: String) {
