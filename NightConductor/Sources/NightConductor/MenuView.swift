@@ -419,6 +419,9 @@ struct UsageMeter: View {
 }
 
 struct SettingsPane: View {
+    @EnvironmentObject var state: AppState
+    @State private var checkingUpdate = false
+    @State private var checkedUpToDate = false
     @AppStorage("startHour") private var startHour = 23
     @AppStorage("endHour") private var endHour = 7
     @AppStorage("fiveHourCeiling") private var fiveHourCeiling = 85.0
@@ -513,6 +516,36 @@ struct SettingsPane: View {
                         .controlSize(.small)
                     }
                 }
+            }
+            Divider().opacity(0.4)
+            HStack {
+                if !state.isScreenshot {  // the offscreen render has no bundle version
+                    Text("Version \(UpdateChecker.currentVersion)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(checkingUpdate ? "Checking…" : "Check for updates") {
+                    checkingUpdate = true
+                    checkedUpToDate = false
+                    Task {
+                        await state.checkForUpdates(force: true)
+                        checkingUpdate = false
+                        checkedUpToDate = state.update == nil
+                    }
+                }
+                .controlSize(.small)
+                .disabled(checkingUpdate)
+            }
+            if let update = state.update, let url = URL(string: update.url) {
+                HStack(spacing: Design.s) {
+                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(.green)
+                    Text("Update available: \(update.version)").font(.caption)
+                    Spacer()
+                    Link("Download", destination: url).controlSize(.small)
+                }
+            } else if checkedUpToDate {
+                Text("You're on the latest version.")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
         }
         .glassCard()

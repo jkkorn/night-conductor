@@ -16,6 +16,7 @@ final class AppState: ObservableObject {
     @Published var isWorking = false
     @Published var currentlyResuming: String?
     @Published var lastTick: Date?
+    @Published var update: UpdateChecker.Release?   // set when a newer release exists
 
     static let scanInterval: TimeInterval = 30        // local DB scan — cheap
     static let resumeInterval: TimeInterval = 600     // how often resumes are attempted
@@ -74,6 +75,7 @@ final class AppState: ObservableObject {
         viewLoop?.cancel()
         resumeLoop?.cancel()
         Task { [weak self] in await self?.refreshUsage(force: true) } // populate meters once at launch
+        Task { [weak self] in await self?.checkForUpdates() }         // notify if a newer release exists
         viewLoop = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refreshView()
@@ -131,6 +133,22 @@ final class AppState: ObservableObject {
         stalled = await combinedStalled()
         lastTick = Date()
         return recomputeDecision(config: config)
+    }
+
+    /// Check GitHub Releases for a newer version. Throttled to once every 6h
+    /// (persisted across launches) so it can't rate-limit GitHub; a manual
+    /// check from settings passes `force`. Sets `update` when one is available.
+    func checkForUpdates(force: Bool = false) async {
+        guard !isScreenshot else { return }
+        let now = Date()
+        if !force, let last = UserDefaults.standard.object(forKey: "lastUpdateCheck") as? Date,
+           now.timeIntervalSince(last) < UpdateChecker.minCheckInterval {
+            return
+        }
+        UserDefaults.standard.set(now, forKey: "lastUpdateCheck")
+        guard let latest = await UpdateChecker.fetchLatest() else { return }
+        update = UpdateChecker.isNewer(latest.version, than: UpdateChecker.currentVersion)
+            ? latest : nil
     }
 
     /// Fetch usage with three guards against rate-limiting the shared `/usage`
