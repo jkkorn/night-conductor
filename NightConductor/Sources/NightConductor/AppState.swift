@@ -25,10 +25,13 @@ final class AppState: ObservableObject {
     static let usageRefreshInterval: TimeInterval = 180   // 3 min
     static let usageStaleAfter: TimeInterval = 900        // 15 min → treat as unavailable
     static let maxAttemptsPerPass = 8                     // bound a pass when sessions fail
+    static let transientCooldown: TimeInterval = 300      // 5 min before retrying a server rate-limit
+    static let minUsageAttemptGap: TimeInterval = 20      // floor between /usage calls, even forced ones
 
     private var viewLoop: Task<Void, Never>?
     private var resumeLoop: Task<Void, Never>?
     private var lastUsageFetchAt: Date?
+    private var lastUsageAttemptAt: Date?  // every attempt (success or fail), to floor the rate
     private var usageBackoffUntil: Date?   // set on a 429, grows exponentially
     private var usageBackoffStep = 0
     private var usageJitter: Double = 0     // randomized offset so polls desync
@@ -161,11 +164,14 @@ final class AppState: ObservableObject {
         let now = Date()
         let inBackoff = (usageBackoffUntil.map { now < $0 }) ?? false
         let age = now.timeIntervalSince(lastUsageFetchAt ?? .distantPast)
+        let attemptAge = now.timeIntervalSince(lastUsageAttemptAt ?? .distantPast)
         let threshold = Self.usageRefreshInterval + usageJitter
         if Self.shouldFetchUsage(
             force: force, hasUsage: usage != nil, fresh: usageIsFresh(now),
-            inBackoff: inBackoff, age: age, threshold: threshold
+            inBackoff: inBackoff, age: age, threshold: threshold,
+            attemptAge: attemptAge, minAttemptGap: Self.minUsageAttemptGap
         ) {
+            lastUsageAttemptAt = now
             do {
                 usage = try await UsageClient.fetchUsage()
                 lastUsageFetchAt = Date()
@@ -198,10 +204,31 @@ final class AppState: ObservableObject {
     /// guarantees such a window). Once the cached data is stale, always retry.
     nonisolated static func shouldFetchUsage(
         force: Bool, hasUsage: Bool, fresh: Bool,
-        inBackoff: Bool, age: TimeInterval, threshold: TimeInterval
+        inBackoff: Bool, age: TimeInterval, threshold: TimeInterval,
+        attemptAge: TimeInterval = .greatestFiniteMagnitude, minAttemptGap: TimeInterval = 0
     ) -> Bool {
+        // Floor the call rate: never fetch more than once per minAttemptGap,
+        // even a forced one, so rapid popover opens while rate-limited can't
+        // fire a /usage call per open. First load (no usage yet) is exempt so
+        // the meters populate immediately.
+        if hasUsage && attemptAge < minAttemptGap { return false }
         let blockedByBackoff = inBackoff && fresh
         return !blockedByBackoff && (force || !hasUsage || age > threshold)
+    }
+
+    /// Whether the auto loop should resume this session now. Pinned sessions run
+    /// around the clock; the rest only inside the night window (`nightOK`). A
+    /// session stalled on a TRANSIENT server rate-limit ("temporarily limiting
+    /// requests") gets a cool-down first, so the loop never bounces straight
+    /// back into the same limit and re-triggers it. Manual "Resume now" skips
+    /// this (it doesn't run through here).
+    nonisolated static func autoResumeEligible(
+        _ session: StalledSession, nightOK: Bool, pins: Set<String>, now: Date
+    ) -> Bool {
+        guard nightOK || pins.contains(session.claudeSessionID) else { return false }
+        if session.kind == .transient, let at = session.stalledAt,
+           now.timeIntervalSince(at) < transientCooldown { return false }
+        return true
     }
 
     func usageIsFresh(_ now: Date = Date()) -> Bool {
@@ -243,7 +270,7 @@ final class AppState: ObservableObject {
         guard Policy.budgetAllows(usage: usage, config: config, now: now).resume else { return }
         let nightOK = Policy.shouldResume(usage: usage, config: config, now: now).resume
         let pins = pinnedIDs
-        let eligible = stalled.filter { nightOK || pins.contains($0.claudeSessionID) }
+        let eligible = stalled.filter { Self.autoResumeEligible($0, nightOK: nightOK, pins: pins, now: now) }
         guard !eligible.isEmpty else { return }
         await resumeStalledSessions(sessions: eligible, config: config, manual: false)
     }

@@ -14,7 +14,8 @@ enum ClaudeCodeDB {
     private static let maxStallAge: TimeInterval = 48 * 3600
     private static let tailBytes = 24_000
     private static let headBytes = 16_000
-    private static let maxFilesScanned = 120 // bound worst-case cost
+    private static let maxDirsScanned = 120  // bound cost: at most this many project dirs
+    private static let maxPerDir = 5         // recent transcripts to scan per dir for a stall
 
     static func findStalledSessions(
         root: String = projectsRoot, now: Date = Date()
@@ -35,24 +36,33 @@ enum ClaudeCodeDB {
         }
         recent.sort { $0.mtime > $1.mtime }
 
-        // Collapse to the newest transcript per project dir BEFORE capping.
-        // A project dir maps 1:1 to a cwd, so only its latest transcript can
-        // be the live stall — older ones are history. Capping raw files (a
-        // chatty workspace can have hundreds) could otherwise push another
-        // workspace's only stalled transcript past the limit and hide it.
-        var seenDirs = Set<String>()
-        let candidates = recent
-            .filter { seenDirs.insert($0.url.deletingLastPathComponent().path).inserted }
-            .prefix(maxFilesScanned)
+        // Group transcripts by project dir, newest-first within each dir. A dir
+        // maps 1:1 to a cwd, so we only want one stalled session per workspace.
+        // For each dir we keep its newest STALLED transcript (scanning a few of
+        // its most-recent files), NOT merely its newest transcript: an active
+        // session in a cwd must not hide an older, still-stalled one there.
+        // Bounding both the number of dirs and the files-per-dir keeps cost in
+        // check even for a workspace with hundreds of transcripts.
+        var byDir: [String: [URL]] = [:]
+        var dirOrder: [String] = []
+        for entry in recent {
+            let dir = entry.url.deletingLastPathComponent().path
+            if byDir[dir] == nil { dirOrder.append(dir) }
+            byDir[dir, default: []].append(entry.url)
+        }
 
-        // Parse, keeping at most one stalled session per workspace (the cwd
-        // inside the file can differ from the encoded dir, so dedupe again).
+        // The cwd inside a file can differ from the encoded dir, so dedupe by
+        // the resolved workspace too.
         var out: [StalledSession] = []
         var seenWorkspaces = Set<String>()
-        for entry in candidates {
-            guard let session = parse(url: entry.url, now: now) else { continue }
-            guard seenWorkspaces.insert(session.workspacePath).inserted else { continue }
-            out.append(session)
+        for dir in dirOrder.prefix(maxDirsScanned) {
+            for url in (byDir[dir] ?? []).prefix(maxPerDir) {
+                guard let session = parse(url: url, now: now) else { continue }
+                if seenWorkspaces.insert(session.workspacePath).inserted {
+                    out.append(session)
+                }
+                break // newest stalled transcript in this dir found; move on
+            }
         }
         return out
     }

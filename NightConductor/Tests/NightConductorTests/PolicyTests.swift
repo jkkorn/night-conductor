@@ -94,6 +94,19 @@ final class PolicyTests: XCTestCase {
         XCTAssertTrue(decision.reason.contains("too fast"))
     }
 
+    // Pacing boundary: 3.5 days left → 50% of the week elapsed → allowed =
+    // 50 + pacingMargin(15) = 65%. At or under that we resume; just over holds.
+    func testWeeklyPacingBoundary() {
+        let now = date(hour: 2)
+        let cfg = PolicyConfig()
+        XCTAssertTrue(
+            Policy.budgetAllows(usage: snapshot(weekly: 64, resetsInDays: 3.5, now: now),
+                                config: cfg, now: now).resume)
+        XCTAssertFalse(
+            Policy.budgetAllows(usage: snapshot(weekly: 66, resetsInDays: 3.5, now: now),
+                                config: cfg, now: now).resume)
+    }
+
     func testHighUsageNearResetResumes() {
         let now = date(hour: 2)
         let decision = Policy.shouldResume(

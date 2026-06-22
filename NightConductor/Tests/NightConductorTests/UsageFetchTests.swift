@@ -45,4 +45,21 @@ final class UsageFetchTests: XCTestCase {
         // clock-skew buffer: expiring in 30s is treated as expired (default 60s skew)
         XCTAssertTrue(UsageClient.isExpired(now.addingTimeInterval(30), now: now))
     }
+
+    // A minimum gap floors the /usage call rate even for forced fetches, so
+    // rapid popover opens while rate-limited can't fire a call per open.
+    func testCallRateFloorEvenWhenForced() {
+        // Forced + stale + due, but attempted 5s ago with a 20s floor: skip.
+        XCTAssertFalse(AppState.shouldFetchUsage(
+            force: true, hasUsage: true, fresh: false, inBackoff: false,
+            age: 1000, threshold: 180, attemptAge: 5, minAttemptGap: 20))
+        // Past the floor: allowed.
+        XCTAssertTrue(AppState.shouldFetchUsage(
+            force: true, hasUsage: true, fresh: false, inBackoff: false,
+            age: 1000, threshold: 180, attemptAge: 25, minAttemptGap: 20))
+        // First load (no usage yet) is exempt so meters populate immediately.
+        XCTAssertTrue(AppState.shouldFetchUsage(
+            force: false, hasUsage: false, fresh: false, inBackoff: false,
+            age: 0, threshold: 180, attemptAge: 0, minAttemptGap: 20))
+    }
 }

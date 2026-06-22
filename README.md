@@ -156,6 +156,13 @@ python3 -m autoconduct install    # launchd agent, ticks every 10 min
   not run commands you haven't approved.
 - Your OAuth token is read from the Keychain per request. It's never stored or
   logged.
+- It also catches the transient "Server is temporarily limiting requests (not
+  your usage limit)" error, and waits a few minutes before retrying so it never
+  bounces straight back into the same server limit. Its own usage checks are
+  cached, jittered, and rate-floored, so the app stays well clear of triggering
+  a rate limit itself.
+- It checks GitHub for a newer release on launch and shows an update link in
+  settings. That check is unauthenticated and throttled, so it never spams.
 - Not affiliated with [Conductor](https://conductor.build) or Anthropic. I just
   use both a lot.
 

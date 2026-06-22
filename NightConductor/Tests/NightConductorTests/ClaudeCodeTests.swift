@@ -72,4 +72,23 @@ final class ClaudeCodeTests: XCTestCase {
         try seed(uuid: "w3", lines: [userLine(), errorAssistant()])
         XCTAssertEqual(ClaudeCodeDB.findStalledSessions(root: root.path, now: now).count, 1)
     }
+
+    /// Regression: a newer ACTIVE transcript in a cwd must not hide an older,
+    /// still-stalled transcript there. The scanner keeps the newest STALLED
+    /// transcript per dir, not merely the newest.
+    func testOlderStalledFoundWhenNewestIsActive() throws {
+        try seed(uuid: "old-stalled", lines: [userLine(), errorAssistant()])
+        try seed(uuid: "new-active", lines: [userLine(), okAssistant()])
+        let proj = root.appendingPathComponent("proj")
+        try FileManager.default.setAttributes(
+            [.modificationDate: now.addingTimeInterval(-3600)],
+            ofItemAtPath: proj.appendingPathComponent("old-stalled.jsonl").path)
+        try FileManager.default.setAttributes(
+            [.modificationDate: now.addingTimeInterval(-600)],  // newest
+            ofItemAtPath: proj.appendingPathComponent("new-active.jsonl").path)
+
+        let stalled = ClaudeCodeDB.findStalledSessions(root: root.path, now: now)
+        XCTAssertEqual(stalled.count, 1)
+        XCTAssertEqual(stalled.first?.claudeSessionID, "old-stalled")
+    }
 }
