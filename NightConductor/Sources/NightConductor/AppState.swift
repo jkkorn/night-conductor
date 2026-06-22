@@ -26,10 +26,12 @@ final class AppState: ObservableObject {
     static let usageStaleAfter: TimeInterval = 900        // 15 min → treat as unavailable
     static let maxAttemptsPerPass = 8                     // bound a pass when sessions fail
     static let transientCooldown: TimeInterval = 300      // 5 min before retrying a server rate-limit
+    static let minUsageAttemptGap: TimeInterval = 20      // floor between /usage calls, even forced ones
 
     private var viewLoop: Task<Void, Never>?
     private var resumeLoop: Task<Void, Never>?
     private var lastUsageFetchAt: Date?
+    private var lastUsageAttemptAt: Date?  // every attempt (success or fail), to floor the rate
     private var usageBackoffUntil: Date?   // set on a 429, grows exponentially
     private var usageBackoffStep = 0
     private var usageJitter: Double = 0     // randomized offset so polls desync
@@ -162,11 +164,14 @@ final class AppState: ObservableObject {
         let now = Date()
         let inBackoff = (usageBackoffUntil.map { now < $0 }) ?? false
         let age = now.timeIntervalSince(lastUsageFetchAt ?? .distantPast)
+        let attemptAge = now.timeIntervalSince(lastUsageAttemptAt ?? .distantPast)
         let threshold = Self.usageRefreshInterval + usageJitter
         if Self.shouldFetchUsage(
             force: force, hasUsage: usage != nil, fresh: usageIsFresh(now),
-            inBackoff: inBackoff, age: age, threshold: threshold
+            inBackoff: inBackoff, age: age, threshold: threshold,
+            attemptAge: attemptAge, minAttemptGap: Self.minUsageAttemptGap
         ) {
+            lastUsageAttemptAt = now
             do {
                 usage = try await UsageClient.fetchUsage()
                 lastUsageFetchAt = Date()
@@ -199,8 +204,14 @@ final class AppState: ObservableObject {
     /// guarantees such a window). Once the cached data is stale, always retry.
     nonisolated static func shouldFetchUsage(
         force: Bool, hasUsage: Bool, fresh: Bool,
-        inBackoff: Bool, age: TimeInterval, threshold: TimeInterval
+        inBackoff: Bool, age: TimeInterval, threshold: TimeInterval,
+        attemptAge: TimeInterval = .greatestFiniteMagnitude, minAttemptGap: TimeInterval = 0
     ) -> Bool {
+        // Floor the call rate: never fetch more than once per minAttemptGap,
+        // even a forced one, so rapid popover opens while rate-limited can't
+        // fire a /usage call per open. First load (no usage yet) is exempt so
+        // the meters populate immediately.
+        if hasUsage && attemptAge < minAttemptGap { return false }
         let blockedByBackoff = inBackoff && fresh
         return !blockedByBackoff && (force || !hasUsage || age > threshold)
     }
