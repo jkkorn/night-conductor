@@ -2,7 +2,14 @@
 
 All notable changes to Night Conductor. Dates are when the release was cut.
 
-## Unreleased
+## 1.0.4
+
+### Added
+- A configurable resume pace. A slider in Settings sets how often the night
+  watch attempts a resume (5 to 20 minutes, jittered), so you can spread the
+  night's work out as much as you like.
+
+## 1.0.3
 
 ### Added
 - Cool-down before retrying a transient server rate-limit. The app already

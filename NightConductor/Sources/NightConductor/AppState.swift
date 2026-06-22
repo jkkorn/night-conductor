@@ -53,6 +53,7 @@ final class AppState: ObservableObject {
             "endHour": 7,
             "fiveHourCeiling": 85.0,
             "weeklyCeiling": 90.0,
+            "resumePaceMinutes": 10.0,
         ])
         if forScreenshots { return } // inert state; data injected by caller
         // No accessibility prompt at launch — that nags on every relaunch.
@@ -88,8 +89,10 @@ final class AppState: ObservableObject {
         resumeLoop = Task { [weak self] in
             while !Task.isCancelled {
                 // Jittered gap between resume attempts so the night's resumes
-                // spread out (and don't sync to a robotic 10-min beat).
-                let gap = Self.resumeInterval * Double.random(in: 0.6...1.4) // ~6–14 min
+                // spread out (and don't sync to a robotic beat). Pace is the
+                // user's setting (clamped); jitter is +/-40%.
+                let pace = Self.paceSeconds(UserDefaults.standard.object(forKey: "resumePaceMinutes") as? Double)
+                let gap = pace * Double.random(in: 0.6...1.4)
                 try? await Task.sleep(for: .seconds(gap))
                 await self?.resumeTick()
             }
@@ -214,6 +217,12 @@ final class AppState: ObservableObject {
         if hasUsage && attemptAge < minAttemptGap { return false }
         let blockedByBackoff = inBackoff && fresh
         return !blockedByBackoff && (force || !hasUsage || age > threshold)
+    }
+
+    /// Seconds between resume attempts from the user's "resume pace" setting,
+    /// clamped to a sane 5 to 20 minute range (jitter is added at the call site).
+    nonisolated static func paceSeconds(_ minutes: Double?) -> TimeInterval {
+        min(20, max(5, minutes ?? 10)) * 60
     }
 
     /// Whether the auto loop should resume this session now. Pinned sessions run

@@ -34,4 +34,15 @@ final class ResumeEligibilityTests: XCTestCase {
         XCTAssertTrue(eligible(session(transient: true, stalledAgo: nil), nightOK: true))   // unknown time: don't block
         XCTAssertTrue(eligible(session(transient: false, stalledAgo: 30), nightOK: true))   // cool-down is transient-only
     }
+
+    // The "resume pace" setting (minutes) is clamped to 5...20 and converted to
+    // seconds; nil (unset) falls back to the 10 min default.
+    func testResumePaceClamping() {
+        XCTAssertEqual(AppState.paceSeconds(10), 600)
+        XCTAssertEqual(AppState.paceSeconds(5), 300)
+        XCTAssertEqual(AppState.paceSeconds(20), 1200)
+        XCTAssertEqual(AppState.paceSeconds(2), 300)    // clamped up to 5
+        XCTAssertEqual(AppState.paceSeconds(60), 1200)  // clamped down to 20
+        XCTAssertEqual(AppState.paceSeconds(nil), 600)  // unset -> default
+    }
 }

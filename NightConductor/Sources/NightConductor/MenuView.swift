@@ -426,6 +426,7 @@ struct SettingsPane: View {
     @AppStorage("endHour") private var endHour = 7
     @AppStorage("fiveHourCeiling") private var fiveHourCeiling = 85.0
     @AppStorage("weeklyCeiling") private var weeklyCeiling = 90.0
+    @AppStorage("resumePaceMinutes") private var resumePaceMinutes = 10.0
     @AppStorage("uiResume") private var uiResume = true
     @AppStorage("menuBarUsage") private var menuBarUsage = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -477,6 +478,14 @@ struct SettingsPane: View {
                     .font(.caption).frame(width: 96, alignment: .leading)
                 NightSlider(value: $weeklyCeiling, range: 50...100, step: 5)
             }
+            HStack(spacing: Design.l) {
+                Text("Resume pace \(Int(resumePaceMinutes))m")
+                    .font(.caption).frame(width: 96, alignment: .leading)
+                NightSlider(value: $resumePaceMinutes, range: 5...20, step: 1)
+            }
+            Text("How often the watch attempts a resume overnight. Higher spreads them out more.")
+                .font(.caption2).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Toggle("Show 5h usage in menu bar", isOn: $menuBarUsage)
                 .font(.caption)
                 .toggleStyle(.checkbox)
