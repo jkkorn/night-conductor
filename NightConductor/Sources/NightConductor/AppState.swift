@@ -26,6 +26,7 @@ final class AppState: ObservableObject {
     static let usageStaleAfter: TimeInterval = 900        // 15 min → treat as unavailable
     static let maxAttemptsPerPass = 8                     // bound a pass when sessions fail
     static let transientCooldown: TimeInterval = 300      // 5 min before retrying a server rate-limit
+    static let resumeCooldown: TimeInterval = 600         // 10 min before re-firing the SAME session
     static let minUsageAttemptGap: TimeInterval = 20      // floor between /usage calls, even forced ones
 
     private var viewLoop: Task<Void, Never>?
@@ -39,6 +40,7 @@ final class AppState: ObservableObject {
     private var lastInWindow: Bool?
     private var lastClaudeCodeScan: Date?
     private var cachedClaudeCode: [StalledSession] = []
+    private var lastResumedAt: [String: Date] = [:]  // ledgerKey -> last resume, to space re-fires
     // Guards against the resume loop and the manual "Resume now" button
     // running a resume pass at the same time (which could double-run a
     // session and bypass the per-night caps).
@@ -247,11 +249,16 @@ final class AppState: ObservableObject {
     /// back into the same limit and re-triggers it. Manual "Resume now" skips
     /// this (it doesn't run through here).
     nonisolated static func autoResumeEligible(
-        _ session: StalledSession, nightOK: Bool, pins: Set<String>, now: Date
+        _ session: StalledSession, nightOK: Bool, pins: Set<String>, now: Date,
+        lastResumedAt: Date? = nil
     ) -> Bool {
         guard nightOK || pins.contains(session.claudeSessionID) else { return false }
         if session.kind == .transient, let at = session.stalledAt,
            now.timeIntervalSince(at) < transientCooldown { return false }
+        // Don't re-fire the SAME session too soon. A headless resume doesn't
+        // clear the host app's stalled flag, so without this the loop would
+        // re-resume it every tick and pile inference onto the rate limit.
+        if let last = lastResumedAt, now.timeIntervalSince(last) < resumeCooldown { return false }
         return true
     }
 
@@ -296,7 +303,10 @@ final class AppState: ObservableObject {
         // bypassing the night window. Otherwise only inside the watch window.
         let nightOK = aroundTheClock || Policy.shouldResume(usage: usage, config: config, now: now).resume
         let pins = pinnedIDs
-        let eligible = stalled.filter { Self.autoResumeEligible($0, nightOK: nightOK, pins: pins, now: now) }
+        let eligible = stalled.filter {
+            Self.autoResumeEligible($0, nightOK: nightOK, pins: pins, now: now,
+                                    lastResumedAt: lastResumedAt[$0.ledgerKey])
+        }
         guard !eligible.isEmpty else { return }
         await resumeStalledSessions(sessions: eligible, config: config, manual: false)
     }
@@ -444,6 +454,7 @@ final class AppState: ObservableObject {
             // UNATTENDED loop, not your explicit choices. Manual still logs to
             // history (for the activity log / stat card).
             if result.ok {
+                lastResumedAt[session.ledgerKey] = Date() // space out re-firing this session
                 ResumeHistory.record(ResumeEvent(
                     date: Date(), title: session.title,
                     kind: session.kind == .transient ? "transient" : "usage_limit",
