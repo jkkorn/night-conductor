@@ -35,6 +35,19 @@ final class ResumeEligibilityTests: XCTestCase {
         XCTAssertTrue(eligible(session(transient: false, stalledAgo: 30), nightOK: true))   // cool-down is transient-only
     }
 
+    // A session just resumed must not be re-fired for a cool-down, so the loop
+    // can't pile inference onto a rate limit by re-resuming the same session
+    // (e.g. when a headless resume doesn't clear the host's stalled flag).
+    func testResumeCooldownSpacesSameSession() {
+        let s = session(transient: false, stalledAgo: 3600)
+        XCTAssertFalse(AppState.autoResumeEligible(s, nightOK: true, pins: [], now: now,
+                                                   lastResumedAt: now.addingTimeInterval(-60)))    // just resumed
+        XCTAssertTrue(AppState.autoResumeEligible(s, nightOK: true, pins: [], now: now,
+                                                  lastResumedAt: now.addingTimeInterval(-1200)))   // 20 min ago
+        XCTAssertTrue(AppState.autoResumeEligible(s, nightOK: true, pins: [], now: now,
+                                                  lastResumedAt: nil))                              // never
+    }
+
     // The "resume pace" setting (minutes) is clamped to 5...20 and converted to
     // seconds; nil (unset) falls back to the 10 min default.
     func testResumePaceClamping() {
