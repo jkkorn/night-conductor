@@ -10,12 +10,24 @@ All notable changes to Night Conductor. Dates are when the release was cut.
   only the current session's log, so it looked empty after a relaunch even when
   the watch had been resuming all night. Resumes that landed inside the app
   (chat in sync) are tagged "in app"; the rest ran in the background.
+- The version number now shows in the app, in the popover footer.
 
 ### Fixed
 - Per-session resume cool-down. After a session is resumed it is not retried
   for about ten minutes, so the auto loop can't pile inference onto a session
   that is still rate-limited (for example when a background resume doesn't clear
   the host's stalled flag right away).
+- The usage check is now throttled before the first reading too. When you were
+  signed out or already rate-limited (so no reading had loaded yet), rapidly
+  opening the menu could fire one usage call per open; it is now floored and
+  backed off like every other call, so the app cannot add to a rate limit.
+- Steadier stall detection. A stalled session is no longer missed because a
+  file read landed mid-character or the transcript was very large, and a
+  session whose timestamp can't be read is left alone instead of being treated
+  as brand new (which could resume something you abandoned days ago).
+  Timezone-less timestamps now parse correctly.
+- Finding the claude command line tool now times out, so an unusually slow
+  shell startup can't stall a resume.
 
 ## 1.0.5
 

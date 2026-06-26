@@ -86,7 +86,9 @@ enum ClaudeDesktopDB {
                   let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { continue }
             let type = event["type"] as? String
-            let at = (event["_audit_timestamp"] as? String).flatMap(ISO.parse) ?? Date()
+            // Fail closed: an undateable stall is treated as ancient, so the
+            // maxStallAge guard skips it rather than resuming a stale session.
+            let at = (event["_audit_timestamp"] as? String).flatMap(ISO.parse) ?? .distantPast
 
             if type == "result", event["is_error"] as? Bool == true,
                (event["api_error_status"] as? NSNumber)?.intValue == 429 {

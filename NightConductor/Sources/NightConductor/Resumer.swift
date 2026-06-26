@@ -41,7 +41,16 @@ enum Resumer {
         process.standardOutput = stdout
         process.standardError = Pipe()
         guard (try? process.run()) != nil else { return nil }
-        process.waitUntilExit()
+        // Bound the wait: a pathological login shell (a ~/.zshrc that blocks on
+        // input, or a stalled nvm/asdf init) must not hang the resume pass
+        // forever. This runs on a detached task, but a never-returning call
+        // would leave the pass — and `isResuming` — wedged for the app's life.
+        let exited = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async { process.waitUntilExit(); exited.signal() }
+        guard exited.wait(timeout: .now() + 10) == .success else {
+            process.terminate()
+            return nil
+        }
         guard process.terminationStatus == 0 else { return nil }
         let output = String(
             data: stdout.fileHandleForReading.readDataToEndOfFile(),

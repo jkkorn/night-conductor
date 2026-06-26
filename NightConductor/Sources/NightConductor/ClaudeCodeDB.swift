@@ -12,7 +12,7 @@ enum ClaudeCodeDB {
     static var projectsRoot: String { NSHomeDirectory() + "/.claude/projects" }
 
     private static let maxStallAge: TimeInterval = 48 * 3600
-    private static let tailBytes = 24_000
+    private static let tailBytes = 131_072  // 128KB: keep the limit error in view past large trailing tool output
     private static let headBytes = 16_000
     private static let maxDirsScanned = 120  // bound cost: at most this many project dirs
     private static let maxPerDir = 5         // recent transcripts to scan per dir for a stall
@@ -88,7 +88,9 @@ enum ClaudeCodeDB {
             guard event["type"] as? String == "assistant" else { continue }
             let isError = event["isApiErrorMessage"] as? Bool == true
             let status = (event["apiErrorStatus"] as? NSNumber)?.intValue ?? 0
-            let ts = (event["timestamp"] as? String).flatMap(ISO.parse) ?? now
+            // Fail closed on an undateable timestamp: distantPast trips the
+            // maxStallAge guard below, so we never resurrect an old stall.
+            let ts = (event["timestamp"] as? String).flatMap(ISO.parse) ?? .distantPast
             lastAssistant = (isError, status, assistantText(event), ts)
         }
 
@@ -155,13 +157,17 @@ enum ClaudeCodeDB {
         let start = size > UInt64(maxBytes) ? size - UInt64(maxBytes) : 0
         try? handle.seek(toOffset: start)
         let data = (try? handle.readToEnd()) ?? Data()
-        return (String(data: data, encoding: .utf8) ?? "").split(separator: "\n").map(String.init)
+        // Lenient: a byte window that begins/ends mid-UTF-8 must not nil out the
+        // WHOLE read (strict decode does), which would silently skip the file.
+        return String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init)
     }
 
     private static func head(_ url: URL, maxBytes: Int) -> [String] {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return [] }
         defer { try? handle.close() }
         let data = (try? handle.read(upToCount: maxBytes)) ?? Data()
-        return (String(data: data, encoding: .utf8) ?? "").split(separator: "\n").map(String.init)
+        // Lenient: a byte window that begins/ends mid-UTF-8 must not nil out the
+        // WHOLE read (strict decode does), which would silently skip the file.
+        return String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init)
     }
 }
