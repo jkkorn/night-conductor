@@ -136,6 +136,11 @@ enum ISO {
         }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: cleaned)
+        // A timestamp with no timezone designator (e.g. SQLite's
+        // datetime('now') → "2026-06-26T10:30:00") fails .withInternetDateTime.
+        // Assume UTC and retry, so such rows aren't silently dropped — which
+        // would either miss a real stall or, where the caller falls back to
+        // "now", resurrect a long-abandoned one and waste the token budget.
+        return formatter.date(from: cleaned) ?? formatter.date(from: cleaned + "Z")
     }
 }

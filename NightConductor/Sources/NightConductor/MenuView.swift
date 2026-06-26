@@ -419,6 +419,10 @@ struct ToolbarIconButton: View {
 extension MenuView {
     var about: some View {
         VStack(spacing: 2) {
+            if !state.isScreenshot {  // the offscreen render has no bundle version
+                Text("Night Conductor \(UpdateChecker.currentVersion)")
+                    .foregroundStyle(.secondary)
+            }
             Text("Made with ❤️ in Brazil")
             HStack(spacing: 5) {
                 Link("Jonathan Korn", destination: AboutLinks.linkedIn).underline()

@@ -91,4 +91,22 @@ final class ClaudeCodeTests: XCTestCase {
         XCTAssertEqual(stalled.count, 1)
         XCTAssertEqual(stalled.first?.claudeSessionID, "old-stalled")
     }
+
+    private func errorAssistantAt(_ ts: String) -> String {
+        #"{"type":"assistant","isApiErrorMessage":true,"apiErrorStatus":429,"message":{"role":"assistant","content":[{"type":"text","text":"You've hit your usage limit"}]},"timestamp":"\#(ts)"}"#
+    }
+
+    // Fail closed: an undateable stall timestamp must not be treated as fresh.
+    // It used to default to "now", which would resurrect a long-abandoned
+    // session and burn the token budget.
+    func testUndateableStallIsIgnored() throws {
+        try seed(uuid: "bad-ts", lines: [userLine(), errorAssistantAt("not-a-timestamp")])
+        XCTAssertTrue(ClaudeCodeDB.findStalledSessions(root: root.path, now: now).isEmpty)
+    }
+
+    // A genuinely old stall (beyond the 48h window) is ignored.
+    func testOldStallBeyondWindowIgnored() throws {
+        try seed(uuid: "old", lines: [userLine(), errorAssistantAt("2026-06-10T10:00:00.000Z")])
+        XCTAssertTrue(ClaudeCodeDB.findStalledSessions(root: root.path, now: now).isEmpty)
+    }
 }

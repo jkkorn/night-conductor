@@ -59,6 +59,7 @@ final class AppState: ObservableObject {
             "aroundTheClock": false,
         ])
         if forScreenshots { return } // inert state; data injected by caller
+        usageJitter = Double(Int.random(in: 0...45)) // desync the very first poll too
         // No accessibility prompt at launch — that nags on every relaunch.
         // The settings panel shows a button to grant it on the user's terms.
         start()
@@ -221,11 +222,17 @@ final class AppState: ObservableObject {
         attemptAge: TimeInterval = .greatestFiniteMagnitude, minAttemptGap: TimeInterval = 0
     ) -> Bool {
         // Floor the call rate: never fetch more than once per minAttemptGap,
-        // even a forced one, so rapid popover opens while rate-limited can't
-        // fire a /usage call per open. First load (no usage yet) is exempt so
-        // the meters populate immediately.
-        if hasUsage && attemptAge < minAttemptGap { return false }
-        let blockedByBackoff = inBackoff && fresh
+        // even a forced one, so rapid popover opens can't fire a /usage call per
+        // open. This holds even before the first SUCCESS — a failed first fetch
+        // (429, signed out, network) leaves `usage` nil, and that must NOT exempt
+        // the floor. A true first load (never attempted) has attemptAge of
+        // .greatestFiniteMagnitude, so it stays exempt and the meters populate.
+        if attemptAge < minAttemptGap { return false }
+        // The 429 backoff throttles polling, but must never strand us on a STALE
+        // reading (a stale "you're maxed" value would hold all night). So it
+        // blocks when the data is fresh OR when we have no reading at all, and
+        // stands down only to recover a stale one.
+        let blockedByBackoff = inBackoff && (fresh || !hasUsage)
         return !blockedByBackoff && (force || !hasUsage || age > threshold)
     }
 

@@ -57,9 +57,27 @@ final class UsageFetchTests: XCTestCase {
         XCTAssertTrue(AppState.shouldFetchUsage(
             force: true, hasUsage: true, fresh: false, inBackoff: false,
             age: 1000, threshold: 180, attemptAge: 25, minAttemptGap: 20))
-        // First load (no usage yet) is exempt so meters populate immediately.
+        // The floor applies even with NO reading yet: a failed first fetch
+        // (429 / signed out) leaves usage nil, and rapid popover opens must
+        // still be floored. (Regression: this case used to fire one /usage
+        // call per open because the floor was gated on hasUsage.)
+        XCTAssertFalse(AppState.shouldFetchUsage(
+            force: true, hasUsage: false, fresh: false, inBackoff: false,
+            age: 1000, threshold: 180, attemptAge: 3, minAttemptGap: 20))
+        // A TRUE first load (never attempted → attemptAge defaults to .greatest)
+        // is exempt, so the meters populate immediately.
         XCTAssertTrue(AppState.shouldFetchUsage(
             force: false, hasUsage: false, fresh: false, inBackoff: false,
-            age: 0, threshold: 180, attemptAge: 0, minAttemptGap: 20))
+            age: 0, threshold: 180, minAttemptGap: 20))
+    }
+
+    // A 429 backoff must also hold when we have NO reading yet — otherwise a
+    // user who is already rate-limited (first fetch 429'd, usage still nil)
+    // could re-fire /usage on every popover open. Backoff only stands down to
+    // recover a STALE reading, which the nil case is not. (Regression.)
+    func testBackoffHoldsWhenNoReadingYet() {
+        XCTAssertFalse(AppState.shouldFetchUsage(
+            force: true, hasUsage: false, fresh: false, inBackoff: true,
+            age: 1000, threshold: 180, attemptAge: 100, minAttemptGap: 20))
     }
 }
