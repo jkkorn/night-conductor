@@ -2,6 +2,21 @@
 
 All notable changes to Night Conductor. Dates are when the release was cut.
 
+## 1.0.7
+
+### Added
+- Launch at login is on by default now, so a restart never leaves the watch
+  silently not running (turn it off in Settings if you prefer). This was the
+  most common reason it looked like nothing happened: the app simply was not up.
+- Proof that it is working. The Activity panel now shows, for the last 24 hours,
+  whether it is keeping your Mac awake right now and how long it kept it awake,
+  alongside how many sessions it resumed.
+
+### Changed
+- Honest wording on the nightly wake: it can wake your Mac from sleep, but it
+  cannot turn on a Mac that is fully shut down (no app can, especially on Apple
+  silicon).
+
 ## 1.0.6
 
 ### Added

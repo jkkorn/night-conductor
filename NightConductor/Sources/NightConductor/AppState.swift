@@ -38,6 +38,7 @@ final class AppState: ObservableObject {
     private var usageJitter: Double = 0     // randomized offset so polls desync
     private var signInExpired = false       // Claude Code token expired → tell the user
     private var lastInWindow: Bool?
+    private var lastKeepAwake = false  // last computed keep-awake state, to log real transitions
     private var lastClaudeCodeScan: Date?
     private var cachedClaudeCode: [StalledSession] = []
     private var lastResumedAt: [String: Date] = [:]  // ledgerKey -> last resume, to space re-fires
@@ -87,6 +88,14 @@ final class AppState: ObservableObject {
     func start() {
         viewLoop?.cancel()
         resumeLoop?.cancel()
+        // Reliability: default to launching at login (first launch only), so a
+        // restart never leaves the watch silently dead. And close any keep-awake
+        // span left open by a previous run that was killed while holding the Mac
+        // awake, so the awake total stays honest.
+        LoginItem.ensureDefaultOnFirstLaunch()
+        if let lastAlive = UserDefaults.standard.object(forKey: "lastHeartbeat") as? Date {
+            PowerLog.closeOpenSpan(lastAlive: lastAlive)
+        }
         Task { [weak self] in await self?.refreshUsage(force: true) } // populate meters once at launch
         Task { [weak self] in await self?.checkForUpdates() }         // notify if a newer release exists
         viewLoop = Task { [weak self] in
@@ -145,7 +154,13 @@ final class AppState: ObservableObject {
         )
         // Around-the-clock keeps the Mac awake whenever armed, so it's ready to
         // resume the instant a limit resets; otherwise only during the window.
-        PowerManager.preventIdleSleep(armed && (aroundTheClock || inWindow))
+        let keepAwake = armed && (aroundTheClock || inWindow)
+        if keepAwake != lastKeepAwake {
+            PowerLog.record(awake: keepAwake) // durable proof of when we held the Mac awake
+            lastKeepAwake = keepAwake
+        }
+        PowerManager.preventIdleSleep(keepAwake)
+        UserDefaults.standard.set(Date(), forKey: "lastHeartbeat") // liveness proof
         checkMorningSummary(inWindow: inWindow, config: config)
         stalled = await combinedStalled()
         lastTick = Date()

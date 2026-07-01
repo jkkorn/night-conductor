@@ -281,6 +281,7 @@ struct MenuView: View {
         let resumes = ResumeHistory.recent(limit: 40)
         return ScrollView {
             VStack(alignment: .leading, spacing: Design.m) {
+                watchProof
                 VStack(alignment: .leading, spacing: 4) {
                     activitySectionLabel("Recent resumes")
                     if resumes.isEmpty {
@@ -313,6 +314,36 @@ struct MenuView: View {
             .font(.system(size: 9, weight: .semibold))
             .tracking(0.6)
             .foregroundStyle(.tertiary)
+    }
+
+    /// Visible proof the watch is real: whether it's holding the Mac awake right
+    /// now, and how long it kept it awake plus how many sessions it resumed in
+    /// the last 24 hours. Reads durable stores, so it survives relaunches.
+    private var watchProof: some View {
+        let holding = PowerManager.isHoldingAwake
+        let awake = PowerLog.awakeSeconds(since: Date().addingTimeInterval(-24 * 3600))
+        let resumes = ResumeHistory.count(within: 24 * 3600)
+        return VStack(alignment: .leading, spacing: 4) {
+            activitySectionLabel("Last 24 hours")
+            HStack(spacing: Design.s) {
+                Image(systemName: holding ? "bolt.horizontal.fill" : "pause.circle")
+                    .font(.caption2)
+                    .foregroundStyle(holding ? Color.indigo : Color.secondary)
+                Text(holding ? "Keeping your Mac awake now"
+                             : "Not holding the Mac awake right now")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            Text("Kept awake \(awakeText(awake)) and resumed \(resumes) session\(resumes == 1 ? "" : "s").")
+                .font(.caption2).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func awakeText(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds) / 60
+        guard minutes >= 1 else { return "under a minute" }
+        let hours = minutes / 60, rem = minutes % 60
+        return hours > 0 ? "\(hours)h \(rem)m" : "\(rem)m"
     }
 
     private var footer: some View {
@@ -545,7 +576,7 @@ struct SettingsPane: View {
                     }.controlSize(.small)
                 }
             }
-            Text("Night Conductor keeps your Mac awake during the watch by itself. Only schedule a wake if your Mac fully sleeps before then (asks for your password once).")
+            Text("Night Conductor keeps your Mac awake during the watch by itself. Schedule a wake only if your Mac fully sleeps before then (asks for your password once). It can wake your Mac from sleep, but it cannot turn on a Mac that is shut down.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

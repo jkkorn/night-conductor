@@ -12,6 +12,10 @@ enum PowerManager {
     private static var assertionID: IOPMAssertionID = 0
     private static var held = false
 
+    /// Whether the keep-awake assertion is held right now, so the UI can show
+    /// live proof ("Keeping your Mac awake") instead of an unverifiable claim.
+    static var isHoldingAwake: Bool { held }
+
     /// Hold/release an assertion that stops the system idle-sleeping, so
     /// every overnight tick and resume actually runs. Idempotent.
     static func preventIdleSleep(_ on: Bool) {
