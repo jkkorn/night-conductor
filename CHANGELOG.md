@@ -2,6 +2,15 @@
 
 All notable changes to Night Conductor. Dates are when the release was cut.
 
+## 1.0.8
+
+### Added
+- Proof of why the watch did not resume anything. The app already computes a
+  live reason every tick (an expired sign-in, stale usage, and so on) but it
+  only ever lived on screen in the moment. It is now recorded durably, and the
+  Activity panel shows the biggest blocker from the last 24 hours, for example
+  "Held 6h 40m: Claude sign-in expired." Silent on a normal night.
+
 ## 1.0.7
 
 ### Added

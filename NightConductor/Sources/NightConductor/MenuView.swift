@@ -321,8 +321,10 @@ struct MenuView: View {
     /// the last 24 hours. Reads durable stores, so it survives relaunches.
     private var watchProof: some View {
         let holding = PowerManager.isHoldingAwake
-        let awake = PowerLog.awakeSeconds(since: Date().addingTimeInterval(-24 * 3600))
+        let since = Date().addingTimeInterval(-24 * 3600)
+        let awake = PowerLog.awakeSeconds(since: since)
         let resumes = ResumeHistory.count(within: 24 * 3600)
+        let longestHold = HoldLog.longestHold(since: since)
         return VStack(alignment: .leading, spacing: 4) {
             activitySectionLabel("Last 24 hours")
             HStack(spacing: Design.s) {
@@ -336,6 +338,18 @@ struct MenuView: View {
             Text("Kept awake \(awakeText(awake)) and resumed \(resumes) session\(resumes == 1 ? "" : "s").")
                 .font(.caption2).foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
+            // Only shown when something actually blocked resuming — silent on
+            // a normal night, so this reads as a real answer to "why didn't it
+            // resume anything," not routine noise.
+            if let hold = longestHold, hold.seconds >= 60 {
+                HStack(alignment: .top, spacing: Design.s) {
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.caption2).foregroundStyle(.orange)
+                    Text("Held \(awakeText(hold.seconds)): \(hold.reason)")
+                        .font(.caption2).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 

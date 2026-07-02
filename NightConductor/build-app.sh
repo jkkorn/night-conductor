@@ -21,8 +21,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
     <key>CFBundleName</key><string>Night Conductor</string>
     <key>CFBundleDisplayName</key><string>Night Conductor</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.0.7</string>
-    <key>CFBundleVersion</key><string>8</string>
+    <key>CFBundleShortVersionString</key><string>1.0.8</string>
+    <key>CFBundleVersion</key><string>9</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>LSUIElement</key><true/>

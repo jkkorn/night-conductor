@@ -95,6 +95,7 @@ final class AppState: ObservableObject {
         LoginItem.ensureDefaultOnFirstLaunch()
         if let lastAlive = UserDefaults.standard.object(forKey: "lastHeartbeat") as? Date {
             PowerLog.closeOpenSpan(lastAlive: lastAlive)
+            HoldLog.closeOpenSpan(lastAlive: lastAlive)
         }
         Task { [weak self] in await self?.refreshUsage(force: true) } // populate meters once at launch
         Task { [weak self] in await self?.checkForUpdates() }         // notify if a newer release exists
@@ -293,9 +294,13 @@ final class AppState: ObservableObject {
     private func recomputeDecision(config: PolicyConfig) -> Bool {
         let now = Date()
         if let snapshot = usage, usageIsFresh(now) {
-            decision = Policy.shouldResume(
+            let result = Policy.shouldResume(
                 usage: snapshot, config: config, now: now, ignoreActiveHours: false
             )
+            decision = result
+            // .standingBy is the intentional daytime rest, not a problem — only
+            // .holding is worth a durable record of "resume was blocked, and why."
+            HoldLog.record(reason: (!result.resume && result.state == .holding) ? result.reason : "")
             return true
         }
         let reason: String
@@ -307,6 +312,12 @@ final class AppState: ObservableObject {
             reason = "Usage data is stale, holding"
         }
         decision = Decision(resume: false, reason: reason, state: .checking)
+        // Unlike .holding above, .checking here can be a brief, normal blip (a
+        // fetch in flight) or the exact multi-hour failure this log exists to
+        // catch (e.g. a sign-in that stayed expired all night). Recording it
+        // is harmless either way: HoldLog dedupes unchanged reasons, so a
+        // fast-clearing blip collapses to one short-lived entry.
+        HoldLog.record(reason: reason)
         return false
     }
 
