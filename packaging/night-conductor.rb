@@ -1,14 +1,13 @@
 # Homebrew Cask for Night Conductor.
 #
-# This is ready to publish once you cut a signed, notarized release. Steps:
-#   1. Sign + notarize the app (see packaging/README.md), zip it as
-#      Night-Conductor-<version>.zip, and attach it to a GitHub release.
-#   2. Fill in `version` and the real `sha256` (shasum -a 256 <zip>).
-#   3. Put this file in a tap repo: github.com/jkkorn/homebrew-tap →
-#      Casks/night-conductor.rb. Then: brew install --cask jkkorn/tap/night-conductor
+# To publish: create a tap repo at github.com/jkkorn/homebrew-tap and put this
+# file at Casks/night-conductor.rb. Users then run:
+#   brew install --cask jkkorn/tap/night-conductor
+# On each release, bump `version` and `sha256` (shasum -a 256 <zip>).
+# Until the app is notarized, installs should add --no-quarantine (see caveats).
 cask "night-conductor" do
-  version "1.0.0"
-  sha256 :no_check # replace with: shasum -a 256 Night-Conductor-1.0.0.zip
+  version "1.0.7"
+  sha256 "9beca8e7f337e1fd8ad5b361bf3b27fd12be4b242786a0786c8916bb6d0586ed"
 
   url "https://github.com/jkkorn/Night-Conductor/releases/download/v#{version}/Night-Conductor-#{version}.zip"
   name "Night Conductor"
@@ -17,6 +16,14 @@ cask "night-conductor" do
 
   depends_on macos: ">= :sequoia"
   app "Night Conductor.app"
+
+  caveats <<~EOS
+    The prebuilt app is not notarized yet, so macOS blocks the first launch.
+    Either install with:
+      brew install --cask --no-quarantine jkkorn/tap/night-conductor
+    or clear the quarantine once:
+      xattr -dr com.apple.quarantine "/Applications/Night Conductor.app"
+  EOS
 
   zap trash: [
     "~/Library/Preferences/app.night-conductor.plist",

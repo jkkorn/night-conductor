@@ -77,6 +77,19 @@ Every few minutes inside your watch window (23:00 to 07:00 by default):
 You'll need macOS 15 or newer, [Conductor](https://conductor.build), and
 [Claude Code](https://claude.com/claude-code) signed in with a subscription.
 
+**Download:** grab the zip from the
+[latest release](https://github.com/jkkorn/Night-Conductor/releases/latest),
+unzip it, and drag **Night Conductor.app** into Applications. The build is not
+notarized yet, so macOS blocks the first launch. Clear that once:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Night Conductor.app"
+```
+
+Or open System Settings, go to Privacy & Security, and click Open Anyway.
+
+**Or build from source** (no warning at all):
+
 ```bash
 git clone https://github.com/jkkorn/Night-Conductor.git
 cd Night-Conductor/NightConductor
@@ -87,9 +100,11 @@ Drag `dist/Night Conductor.app` into Applications and open it. That's it. Then:
 
 1. Click the moon in your menu bar.
 2. Flip the switch to arm the night watch.
-3. Open settings and turn on Launch at login.
-4. The first time, allow Keychain access (click Always Allow) and grant
+3. The first time, allow Keychain access (click Always Allow) and grant
    Accessibility so it can press Retry inside Conductor.
+
+Launch at login is on by default, so the watch survives a restart. Turn it off
+in settings if you prefer.
 
 While the watch is armed and inside its window, Night Conductor keeps your Mac
 awake on its own with a power assertion. No command, no password. If your Mac
